@@ -6,7 +6,7 @@ import { supabase, createUserScopedClient } from './src/config/supabase.js';
 
 // Importación de rutas modulares
 import rutasFacturas from './src/routes/facturas.js';
-import rutasGastosFijos from './src/routes/gastosfijos.js';
+import rutasGastosFijos from './src/routes/gastosFijos.js';
 
 dotenv.config();
 
