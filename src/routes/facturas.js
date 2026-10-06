@@ -79,6 +79,23 @@ router.post('/upload-excel', upload.single('archivo'), async (req, res) => {
     }
 });
 
+// Elimina una factura programada y, si sigue pendiente, devuelve el monto
+// comprometido al saldo de la factura dentro de una sola transacción.
+router.delete('/:id', async (req, res) => {
+    try {
+        const { data, error } = await req.supabase.rpc('fc_eliminar_factura_programada', {
+            p_id: req.params.id
+        });
+
+        if (error) throw error;
+        if (!data?.exito) return res.status(404).json(data || { error: 'No se encontró la factura programada.' });
+        res.json(data);
+    } catch (err) {
+        console.error('Error al eliminar factura programada:', err);
+        res.status(500).json({ error: err.message || 'No se pudo eliminar la factura programada.' });
+    }
+});
+
 // 2. BUSCAR FACTURAS PENDIENTES DE UN PROVEEDOR
 router.get('/pendientes/:rut', async (req, res) => {
     try {

@@ -6,8 +6,9 @@ La aplicación usa Supabase Auth para correo y contraseña. No se guardan contra
 
 1. En Supabase, desactiva el registro público de usuarios en **Authentication → Settings → Allow new users to sign up**. Mantén habilitado el inicio de sesión por correo y contraseña.
 2. Ejecuta una sola vez `supabase/migrations/20261006120000_auth_and_rls.sql` en el SQL Editor del proyecto correcto. La migración activa RLS, elimina políticas anteriores de estas tablas y concede solo las operaciones indicadas en la migración.
-3. En **Authentication → Users**, invita cada correo autorizado. El trigger crea su perfil con `is_active = false`.
-4. Habilita cada perfil explícitamente desde SQL Editor, reemplazando el correo:
+3. Ejecuta también `supabase/migrations/20261006130000_delete_scheduled_invoice.sql`. Añade la operación segura para eliminar una factura programada; si estaba pendiente, restaura ese monto al saldo de la factura. Si ya estaba pagada, no restaura el saldo.
+4. En **Authentication → Users**, invita cada correo autorizado. El trigger crea su perfil con `is_active = false`.
+5. Habilita cada perfil explícitamente desde SQL Editor, reemplazando el correo:
 
    ```sql
    UPDATE public.fc_usuarios
@@ -15,9 +16,9 @@ La aplicación usa Supabase Auth para correo y contraseña. No se guardan contra
    WHERE lower(email) = lower('persona@novovet.cl');
    ```
 
-5. Para quitar acceso, usa `UPDATE public.fc_usuarios SET is_active = false WHERE lower(email) = lower('persona@novovet.cl');`. Para cambiar la contraseña o reenviar una invitación, usa las herramientas de **Authentication → Users**.
-6. En **Authentication → URL Configuration**, configura el Site URL con el dominio HTTPS público de Render (no `localhost`) y agrega esa URL a Redirect URLs. El enlace de invitación debe volver a esa misma aplicación para que aparezca el formulario de creación de contraseña.
-7. En Render configura `SUPABASE_URL` y `SUPABASE_ANON_KEY` con el URL y la clave publicable del mismo proyecto. La página obtiene ambas variables desde `/app-config.js`; no edites ni publiques claves secretas en el HTML.
+6. Para quitar acceso, usa `UPDATE public.fc_usuarios SET is_active = false WHERE lower(email) = lower('persona@novovet.cl');`. Para cambiar la contraseña o reenviar una invitación, usa las herramientas de **Authentication → Users**.
+7. En **Authentication → URL Configuration**, configura el Site URL con el dominio HTTPS público de Render (no `localhost`) y agrega esa URL a Redirect URLs. El enlace de invitación debe volver a esa misma aplicación para que aparezca el formulario de creación de contraseña.
+8. En Render configura `SUPABASE_URL` y `SUPABASE_ANON_KEY` con el URL y la clave publicable del mismo proyecto. La página obtiene ambas variables desde `/app-config.js`; no edites ni publiques claves secretas en el HTML.
 
 No habilites políticas para `anon`: la app exige sesión y usa el rol `authenticated`. La clave publicable puede estar en el navegador; la seguridad depende de RLS y de verificar la sesión. Nunca uses una clave `service_role`/`secret` en el navegador ni en `SUPABASE_ANON_KEY`.
 
