@@ -1,0 +1,2198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Novovet Cash Flow</title>
+    <!-- Fonts Modernas & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+
+	
+    
+    <!-- LIBRERÍA SHEETJS (XLSX) REQUERIDA PARA PROCESAR EXCEL -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root { 
+            --bg-app: #f8fafc; 
+            --card-bg: #ffffff; 
+            --primary-blue: #2563eb; 
+            --primary-hover: #1d4ed8; 
+            --accent-green: #10b981; 
+            --dark-heading: #0f172a; 
+            --border-color: #e2e8f0; 
+        }
+        body { 
+            background-color: var(--bg-app); 
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; 
+            color: #334155; 
+            font-size: 0.82rem; 
+        }
+        .brand-title { font-weight: 800; letter-spacing: -0.5px; color: var(--dark-heading); }
+        .glass-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03); transition: all 0.2s ease; }
+        .card-hero-total { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; border-radius: 10px; padding: 10px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        
+        /* NAVEGACIÓN POR PESTAÑAS */
+        .nav-tabs .nav-link { border: none; color: #64748b; font-weight: 600; padding: 6px 12px; border-bottom: 2px solid transparent; font-size: 0.8rem; }
+        .nav-tabs .nav-link.active { color: var(--accent-green); background: transparent; border-bottom: 2px solid var(--accent-green); }
+        
+        /* TARJETAS MESES SIGUIENTES EN SUBHEADER */
+        #contenedorMesesFuturos { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+        .card-mes-proximo { background: #ffffff; border: 1px solid var(--border-color); border-left: 3px solid var(--primary-blue); border-radius: 6px; padding: 4px 12px; min-width: 130px; text-align: center; box-shadow: 0 2px 4px rgba(15, 23, 42, 0.03); }
+        .card-mes-proximo .mes-lbl { font-size: 0.65rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-mes-proximo .monto-lbl { font-size: 0.82rem; font-weight: 800; color: var(--dark-heading); margin-top: 1px; }
+        
+        .autocomplete-container { position: relative; }
+        #listaSugerencias, #listaSugerenciasLab { position: absolute; top: 100%; left: 0; right: 0; z-index: 9999; max-height: 200px; overflow-y: auto; background: #fff; border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        #contenedorFacturasProveedor { max-height: 280px; overflow-y: auto; padding-right: 2px; }
+        #contenedorFacturasProveedor::-webkit-scrollbar { width: 4px; }
+        #contenedorFacturasProveedor::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        #contenedorFacturasProveedor::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        
+        .invoice-item { border: 1px solid var(--border-color); border-left: 3px solid var(--primary-blue) !important; border-radius: 6px; background: #fff; transition: transform 0.15s ease; padding: 6px !important; }
+        .invoice-item:hover { transform: translateY(-1px); }
+        .btn-action-primary { background-color: #f59e0b; border: none; color: #fff; font-weight: 700; border-radius: 6px; padding: 6px 10px; font-size: 0.78rem; transition: background 0.2s; }
+        .btn-action-primary:hover { background-color: #d97706; color: #fff; }
+        .summary-pill { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; }
+        
+        /* TABLA Y COLUMNA CONGELADA */
+        .table-cashflow { font-size: 0.75rem; white-space: nowrap; border-collapse: separate; border-spacing: 0; }
+        .table-cashflow th { background-color: #0f172a; color: #f8fafc; text-align: center; font-weight: 600; padding: 6px; }
+        .sticky-col { position: sticky; left: 0; background-color: #ffffff !important; z-index: 10; border-right: 2px solid var(--border-color) !important; }
+        th.sticky-col { background-color: #0f172a !important; z-index: 11; }
+        
+        /* ESTILOS DE FILAS DIFERENCIADAS */
+        .row-cheque { background-color: #fffbeb !important; }
+        .row-cheque td.sticky-col { background-color: #fffbeb !important; border-left: 4px solid #f59e0b !important; }
+        
+        .row-proveedor { background-color: #ffffff !important; }
+        .row-proveedor td.sticky-col { background-color: #ffffff !important; border-left: 4px solid #2563eb !important; }
+        
+        .row-gasto { background-color: #fef2f2 !important; }
+        .row-gasto td.sticky-col { background-color: #fef2f2 !important; border-left: 4px solid #ef4444 !important; }
+
+        /* BADGES INTERACTIVOS */
+        .monto-badge { background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-weight: 700; padding: 2px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; display: inline-block; font-size: 0.72rem; }
+        .monto-badge:hover { background-color: #dbeafe; transform: scale(1.04); }
+        .monto-badge-cheque { background-color: #fffbeb; border: 1px solid #fde68a; color: #b45309; font-weight: 700; padding: 2px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; display: inline-block; font-size: 0.72rem; }
+        .monto-badge-cheque:hover { background-color: #fef3c7; transform: scale(1.04); }
+        .monto-badge-gasto { background-color: #fef2f2; border: 1px solid #fecaca; color: #dc2626; font-weight: 700; padding: 2px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; display: inline-block; font-size: 0.72rem; }
+        .monto-badge-gasto:hover { background-color: #fee2e2; transform: scale(1.04); }
+        .celda-resumen-clicable { cursor: pointer; color: #1d4ed8 !important; text-decoration: underline dotted; text-underline-offset: 2px; }
+        .celda-resumen-clicable:hover, .celda-resumen-clicable:focus { background-color: #dbeafe !important; outline: 2px solid #93c5fd; outline-offset: -2px; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. HEADER PRINCIPAL (BARRA NAVEGACIÓN Y ACCIONES GLOBAL) -->
+    <header class="bg-white border-bottom shadow-sm px-3 py-2 mb-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            
+            <!-- MARCA Y NAVEGACIÓN -->
+            <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="bg-success text-white rounded-3 p-1 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                        <i class="bi bi-bar-chart-fill fs-6"></i>
+                    </div>
+                    <h5 class="brand-title mb-0">Novovet <span class="text-success">Cash Flow</span></h5>
+                </div>
+                
+                <!-- NAVEGACIÓN PESTAÑAS -->
+                <ul class="nav nav-tabs border-0 ms-2" id="tabMenu">
+                    <li class="nav-item">
+                        <button class="nav-link active" id="flujo-tab" onclick="mostrarPestana('flujo')"><i class="bi bi-graph-up me-1"></i> Flujo de Caja</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="laboratorio-tab" onclick="mostrarPestana('laboratorio')"><i class="bi bi-search me-1"></i> Consulta por Laboratorio</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="resumen-tab" onclick="mostrarPestana('resumen')"><i class="bi bi-calendar3 me-1"></i> Resumen Mensual</button>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- BOTONES DE ACCIÓN AGRUPADOS -->
+            <div class="d-flex align-items-center gap-2">
+                <button id="btnSyncCheques" class="btn btn-sm btn-outline-primary rounded-2 shadow-sm fw-semibold" onclick="sincronizarCheques()">
+                    <i class="bi bi-arrow-repeat me-1" id="iconSync"></i> Sincronizar Cheques
+                </button>
+                <button class="btn btn-sm btn-outline-danger border shadow-sm rounded-2" onclick="abrirModalGastosFijos()">
+                    <i class="bi bi-dash-circle me-1"></i> Gastos Fijos
+                </button>
+                <button class="btn btn-sm btn-warning text-dark fw-bold rounded-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCargaDatos">
+                    <i class="bi bi-file-earmark-arrow-up-fill me-1"></i> Cargar Datos
+                </button>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- 2. SUBHEADER (FILTRO DE MES Y TARJETAS PROYECCIÓN) -->
+    <div class="container-fluid px-3 mb-3">
+        <div class="bg-white border rounded-3 p-2 d-flex justify-content-between align-items-center shadow-sm">
+            
+            <!-- SELECTOR DE MES A LA IZQUIERDA -->
+            <div class="d-flex align-items-center gap-2 ms-2">
+                <span class="fw-bold text-muted small"><i class="bi bi-calendar-event me-1"></i> Periodo Actual:</span>
+                <select id="selectMes" class="form-select form-select-sm shadow-sm fw-bold border-secondary-subtle" style="width: 140px; border-radius: 6px;" onchange="cambiarMes()">
+                    <option value="9" selected>Septiembre</option>
+                    <option value="10">Octubre</option>
+                    <option value="11">Noviembre</option>
+                    <option value="12">Diciembre</option>
+                </select>
+            </div>
+
+            <!-- TARJETAS DE LOS 3 MESES SIGUIENTES -->
+            <div id="contenedorMesesFuturos">
+                <div class="card-mes-proximo">
+                    <div class="mes-lbl" id="lblMesFuturo1">Octubre</div>
+                    <div class="monto-lbl" id="montoMesFuturo1">$0</div>
+                </div>
+                <div class="card-mes-proximo" style="border-left-color: #8b5cf6;">
+                    <div class="mes-lbl" id="lblMesFuturo2">Noviembre</div>
+                    <div class="monto-lbl" id="montoMesFuturo2">$0</div>
+                </div>
+                <div class="card-mes-proximo" style="border-left-color: #f59e0b;">
+                    <div class="mes-lbl" id="lblMesFuturo3">Diciembre</div>
+                    <div class="monto-lbl" id="montoMesFuturo3">$0</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="container-fluid px-3">
+        <!-- PESTAÑA 1: FLUJO DE CAJA GENERAL -->
+        <div id="tabFlujoCaja" class="row g-2">
+            <!-- SIDEBAR IZQUIERDO -->
+            <div class="col-md-2">
+                <div class="card-hero-total mb-2 text-center">
+                    <span class="text-uppercase fw-bold text-white-50" style="font-size: 0.62rem; letter-spacing: 0.5px;" id="labelHeroMes">SEPTIEMBRE PENDIENTE</span>
+                    <h3 class="fw-extrabold mb-0 mt-1" id="totalPendiente">$0</h3>
+                </div>
+                <div class="glass-card p-2 mb-2">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h6 class="fw-bold mb-0 text-dark style-title" style="font-size: 0.78rem;"><i class="bi bi-calendar-plus me-1 text-primary"></i> Programar Pago</h6>
+                    </div>
+                    <div class="autocomplete-container mb-2">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0 px-2"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" id="inputBuscador" class="form-control border-start-0 ps-0" placeholder="Buscar proveedor..." autocomplete="off" oninput="buscarSugerencias(this.value)">
+                        </div>
+                        <input type="hidden" id="rutSeleccionado">
+                        <div id="listaSugerencias" class="list-group shadow-lg" style="display: none;"></div>
+                    </div>
+                    <div id="contenedorFacturasProveedor" class="mb-2" style="display: none;">
+                        <small class="fw-bold text-muted d-block mb-1" style="font-size: 0.65rem;">FACTURAS:</small>
+                        <div id="listaFacturasCheck"></div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold text-secondary style-lbl mb-1" style="font-size: 0.7rem;">Fecha programada:</label>
+                        <input type="date" id="fechaPago" class="form-control form-control-sm rounded-2">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold text-secondary style-lbl mb-1" style="font-size: 0.7rem;">Monto a pagar (Abono):</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light px-2">$</span>
+                            <input type="number" id="montoAbonoInput" class="form-control rounded-end-2 fw-bold text-primary" placeholder="Monto o abono">
+                        </div>
+                    </div>
+                    <div class="d-flex flex-column gap-1">
+                        <button onclick="programarFacturas()" class="btn btn-action-primary w-100 shadow-sm">
+                            <i class="bi bi-check2-circle me-1"></i> Asignar al Flujo
+                        </button>
+                        <div class="p-1 border rounded-2 bg-light text-center">
+                            <span class="text-muted d-inline" style="font-size: 0.65rem;" id="cantSeleccionadas">0 sel. | </span>
+                            <strong class="text-primary d-inline" style="font-size: 0.78rem;" id="montoTotalSeleccionado">$0</strong>
+                        </div>
+                    </div>
+                    <div id="msgProgramar" class="mt-1"></div>
+                </div>
+                <div class="glass-card p-2">
+                    <h6 class="fw-bold text-muted mb-2" style="font-size: 0.68rem; letter-spacing: 0.5px;">RESUMEN DE SALDOS</h6>
+                    <div class="d-flex flex-column gap-1">
+                        <div class="summary-pill d-flex justify-content-between align-items-center">
+                            <span class="fw-semibold text-dark"><i class="bi bi-bank text-warning me-1"></i>CHEQ</span>
+                            <span class="fw-bold text-dark" id="resumenCheq">$0</span>
+                        </div>
+                        <div class="summary-pill d-flex justify-content-between align-items-center">
+                            <span class="fw-semibold text-dark"><i class="bi bi-tag-fill text-primary me-1"></i>PROV</span>
+                            <span class="fw-bold text-dark" id="resumenProv">$0</span>
+                        </div>
+                        <div class="summary-pill d-flex justify-content-between align-items-center">
+                            <span class="fw-semibold text-dark"><i class="bi bi-dash-circle-fill text-danger me-1"></i>FIJOS</span>
+                            <span class="fw-bold text-dark" id="resumenFijos">$0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MATRIZ / CALENDARIO AMPLIA -->
+            <div class="col-md-10">
+                <div class="glass-card overflow-hidden">
+                    <div class="table-responsive" style="max-height: 750px;">
+                        <table class="table table-bordered align-middle table-cashflow mb-0">
+                            <thead>
+                                <tr id="filaFechasHeader">
+                                    <th style="min-width: 200px;" class="text-start ps-3 sticky-col">Concepto / Proveedor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoMatriz">
+                                <tr><td colspan="32" class="text-center py-5 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Cargando matriz del flujo de caja...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PESTAÑA 2: CONSULTA POR LABORATORIO -->
+        <div id="tabConsultaLaboratorio" style="display: none;">
+            <div class="glass-card p-3 mb-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-5 autocomplete-container">
+                        <label class="form-label fw-bold small mb-1 text-secondary">LABORATORIO / PROVEEDOR</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                            <input type="text" id="inputLabBuscador" class="form-control border-start-0 ps-0" placeholder="Buscar laboratorio..." oninput="buscarSugerenciasLab(this.value)">
+                        </div>
+                        <input type="hidden" id="labRutSeleccionado">
+                        <div id="listaSugerenciasLab" class="list-group shadow-lg" style="display: none;"></div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small mb-1 text-secondary">ESTADO FLUJO</label>
+                        <select id="selectEstadoFlujo" class="form-select form-select-sm" onchange="cargarConsultaLaboratorio()">
+                            <option value="todos">Todos los Estados</option>
+                            <option value="pendiente" selected>Solo Pendientes</option>
+                            <option value="pagado">Solo Pagados</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 text-end pt-3">
+    <button class="btn btn-sm btn-danger fw-bold rounded-2 shadow-sm" onclick="abrirModalPDF()">
+        <i class="bi bi-file-earmark-pdf me-1"></i> Descargar Plan de Pago PDF
+    </button>
+</div>
+                </div>
+            </div>
+            <!-- SECCIÓN 1: FACTURAS AGENDADAS -->
+            <div class="glass-card p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar-check text-success me-2"></i>Facturas Agendadas en Flujo de Caja</h6>
+                    <span class="badge bg-success-subtle text-success border fw-bold" id="totalMontoAgendado">$0</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Fecha Pago</th>
+                                <th>N° Factura</th>
+                                <th>Proveedor</th>
+                                <th>Estado</th>
+                                <th>Monto</th>
+                                <th>Nueva Fecha</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaAgendadasLab">
+                            <tr><td colspan="7" class="text-center text-muted py-4">Seleccione un laboratorio para consultar sus facturas agendadas.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- SECCIÓN 2: FACTURAS POR AGENDAR -->
+            <div class="glass-card p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-exclamation-triangle text-warning me-2"></i>Facturas Sin Agendar (Pendientes por Agendar)</h6>
+                    <span class="badge bg-warning-subtle text-warning border fw-bold" id="totalMontoPorAgendar">$0</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                        <thead class="table-secondary">
+                            <tr>
+                                <th>N° Factura</th>
+                                <th>F. Emisión</th>
+                                <th>F. Vencimiento</th>
+                                <th>Monto Pendiente</th>
+                                <th>Asignar Fecha Pago</th>
+                                <th class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaPorAgendarLab">
+                            <tr><td colspan="6" class="text-center text-muted py-4">Seleccione un laboratorio para consultar facturas pendientes por agendar.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PESTAÑA 3: RESUMEN MENSUAL -->
+        <div id="tabResumenMensual" style="display: none;">
+            <div class="card shadow-sm border-0 mt-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center p-3">
+                    <h5 class="mb-0 fw-bold text-dark">
+                        <i class="bi bi-calendar-range me-2 text-primary"></i>Resumen Mensual
+                    </h5>
+                    <div class="d-flex gap-2">
+                        <select id="selectAnioResumen" class="form-select form-select-sm" style="width: 130px;" onchange="cargarResumenMensual()">
+                            <option value="2026" selected>Año 2026</option>
+                            <option value="2025">Año 2025</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 75vh;">
+                        <table class="table table-bordered table-hover align-middle mb-0 text-nowrap" id="tablaResumenMensual">
+                            <thead class="table-dark" id="headerResumenMensual">
+                                <tr>
+                                    <th>Concepto</th>
+                                    <th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th>
+                                    <th>May</th><th>Jun</th><th>Jul</th><th>Ago</th>
+                                    <th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoResumenMensual">
+                                <!-- La función renderizarTablaResumen inyectará las filas aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="card shadow-sm border-0 mt-3" style="max-width: 620px;">
+                <div class="card-body py-3">
+                    <div class="small text-muted fw-semibold text-uppercase mb-2">Deuda pendiente · <span id="anioDeudaResumen">2026</span> · Todos los meses</div>
+                    <div class="row g-2">
+                        <div class="col-12 col-md-4"><div class="border rounded p-2 h-100"><div class="small text-primary fw-semibold">Cheques a Pagar</div><div class="fw-bold" id="deudaChequesAnual">$0</div></div></div>
+                        <div class="col-12 col-md-4"><div class="border rounded p-2 h-100"><div class="small text-info fw-semibold">Proveedores</div><div class="fw-bold" id="deudaProveedoresAnual">$0</div></div></div>
+                        <div class="col-12 col-md-4"><div class="border rounded p-2 h-100"><div class="small text-danger fw-semibold">Gastos Fijos</div><div class="fw-bold" id="deudaGastosAnual">$0</div></div></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center border-top mt-2 pt-2 fw-bold"><span>Total pendiente</span><span class="text-dark" id="montoDeudaAnual">$0</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- Modal Selección de Facturas para PDF -->
+<div class="modal fade" id="modalPDFSelection" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content shadow-lg border-0">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-pdf-fill me-2"></i>Seleccionar Facturas para Plan de Pago</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <small class="text-muted">Marca las facturas que deseas incluir en el PDF reportado.</small>
+          <button class="btn btn-sm btn-outline-secondary" onclick="toggleSelectAllPDF(this)">Marcar / Desmarcar Todas</button>
+        </div>
+        
+        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+          <table class="table table-hover align-middle" id="tablaCheckboxesPDF">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th width="40"><input type="checkbox" id="checkAllPDF" onclick="toggleSelectAllPDFCheck(this)"></th>
+                <th>N° Factura</th>
+                <th>Fecha Pago / Estado</th>
+                <th class="text-end">Monto</th>
+              </tr>
+            </thead>
+            <tbody id="bodyCheckboxesPDF">
+              <!-- Se llena dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success fw-bold" onclick="generarPDFSeleccionadas()">
+          <i class="bi bi-download me-1"></i> Generar PDF
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+    <!-- MODAL DETALLE DE DOCUMENTOS -->
+    <div class="modal fade" id="modalDetalleDocumentos" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 10px;">
+                <div class="modal-header bg-dark text-white p-2 px-3">
+                    <h6 class="modal-title fw-bold" id="tituloModalDetalle"><i class="bi bi-journal-text me-2"></i>Detalle de Documentos</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Documento / Concepto</th>
+                                    <th>Proveedor / Detalle</th>
+                                    <th>Monto</th>
+                                    <th>Nueva Fecha</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoModalDetalle"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer p-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+    </div>
+</div>
+
+    <!-- MODAL DETALLE DEL RESUMEN DIARIO -->
+    <div class="modal fade" id="modalDetalleResumen" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-primary text-white py-2">
+                    <h6 class="modal-title fw-bold" id="tituloDetalleResumen">Detalle del día</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light"><tr><th>Concepto / Documento</th><th>Proveedor / Detalle</th><th class="text-end">Monto</th><th>Estado</th></tr></thead>
+                            <tbody id="cuerpoDetalleResumen"></tbody>
+                            <tfoot class="table-light fw-bold"><tr><td colspan="2">Total del día</td><td class="text-end" id="totalDetalleResumen"></td><td></td></tr></tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer p-2"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL GASTOS FIJOS -->
+    <div class="modal fade" id="modalGastosFijos" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 10px;">
+                <div class="modal-header bg-danger text-white p-2 px-3">
+                    <h6 class="modal-title fw-bold"><i class="bi bi-dash-circle me-2"></i>Programar Gastos Fijos</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div id="alertaGastosFijos" class="alert d-none py-2 mb-3 small"></div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small">Configure las fechas y montos a programar:</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="agregarNuevoGastoCatalogo()">
+                            <i class="bi bi-plus-lg me-1"></i> Agregar Concepto
+                        </button>
+                    </div>
+                    <div class="table-responsive" style="max-height: 350px;">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Concepto</th>
+                                    <th style="width: 150px;">Monto Promedio</th>
+                                    <th style="width: 160px;">Fecha de Pago</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaGastosFijosBody">
+                                <tr><td colspan="3" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando catálogo...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer p-2 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-sm btn-danger fw-bold" onclick="guardarGastosFijosProgramados()">
+                        <i class="bi bi-save me-1"></i> Guardar Programación
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL UNIFICADO DE CARGA DE DATOS -->
+    <div class="modal fade" id="modalCargaDatos" tabindex="-1" aria-labelledby="modalCargaDatosLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 10px;">
+                
+                <div class="modal-header bg-dark text-white p-2 px-3">
+                    <h6 class="modal-title fw-bold" id="modalCargaDatosLabel">
+                        <i class="bi bi-cloud-upload me-2 text-warning"></i>Módulo de Carga de Archivos Excel
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <div>
+                        <!-- CARGA DE FACTURAS TRANSITORIAS -->
+                        <div>
+                            <div class="p-3 border rounded-3 bg-light">
+                                <h6 class="fw-bold text-info mb-1"><i class="bi bi-file-earmark-arrow-up me-2"></i>Importar Facturas Transitorias</h6>
+                                <p class="text-muted small mb-3">Sube la planilla de facturas temporales de proveedores para procesar y cruzar en la plataforma.</p>
+                                
+                                <div class="mb-3">
+                                    <input type="file" id="inputExcelTransitorias" class="form-control form-control-sm" accept=".xlsx, .xls">
+                                </div>
+                                
+                                <button class="btn btn-info btn-sm text-white w-100 fw-bold" onclick="procesarExcelTransitorias()">
+                                    <i class="bi bi-upload me-1"></i> Subir Facturas Transitorias
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Mensaje de Estado / Feedback -->
+                    <div id="msgCargaResultado" class="mt-3" style="display: none;"></div>
+                </div>
+
+                <div class="modal-footer p-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts Bootstrap & JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+// Inicialización del cliente Supabase
+const SUPABASE_URL = 'https://yfmxnbqglbslmfggizrg.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_3BZmnxkmUOBr-idsqHuNAA_p-i8WdAp'; // Reemplaza por tu anon key de Supabase
+
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let timerBusqueda = null;
+        let facturasObtenidas = [];
+        let datosMatrizGlobal = { programadas: [], cheques: [], gastosFijos: [] };
+        let modalDetalleInstance = null;
+        let modalGFInstance = null;
+        let labSeleccionadoActivo = { rut: '', nombre: '' };
+        const nombresMeses = { 1:'Enero', 2:'Febrero', 3:'Marzo', 4:'Abril', 5:'Mayo', 6:'Junio', 7:'Julio', 8:'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre' };
+
+        document.addEventListener('DOMContentLoaded', () => { 
+            modalDetalleInstance = new bootstrap.Modal(document.getElementById('modalDetalleDocumentos')); 
+            generarColumnasDias(); 
+            cargarMatriz(); 
+            cargarMontosMesesFuturos(); 
+        });
+
+function mostrarPestana(tipo) {
+    const tabs = document.querySelectorAll('#tabMenu .nav-link');
+    tabs.forEach(t => t.classList.remove('active'));
+
+    document.getElementById('tabFlujoCaja').style.display = 'none';
+    document.getElementById('tabConsultaLaboratorio').style.display = 'none';
+    document.getElementById('tabResumenMensual').style.display = 'none';
+
+    if (tipo === 'flujo') { 
+        tabs[0].classList.add('active'); 
+        document.getElementById('tabFlujoCaja').style.display = 'flex'; 
+    } else if (tipo === 'laboratorio') { 
+        tabs[1].classList.add('active'); 
+        document.getElementById('tabConsultaLaboratorio').style.display = 'block'; 
+    } else if (tipo === 'resumen') { 
+        tabs[2].classList.add('active'); 
+        document.getElementById('tabResumenMensual').style.display = 'block'; 
+        
+        // AUTOMÁTICO: Carga los datos de la tabla cuando se abre la pestaña
+        if (typeof cargarResumenMensual === 'function') {
+            cargarResumenMensual();
+        }
+    }
+}
+        function formatearFecha(fechaStr) {
+            if (!fechaStr || fechaStr === 'S/I') return 'S/I';
+            const fechaLimpia = fechaStr.split('T')[0].split(' ')[0];
+            const partes = fechaLimpia.split('-');
+            return partes.length === 3 ? `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0]}` : fechaStr;
+        }
+
+        function obtenerDiasDelMes(mes) { return new Date(2026, mes, 0).getDate(); }
+
+        function generarColumnasDias() {
+            const mesSelect = parseInt(document.getElementById('selectMes').value, 10);
+            const totalDias = obtenerDiasDelMes(mesSelect);
+            const strMes = mesSelect < 10 ? `0${mesSelect}` : `${mesSelect}`;
+            const header = document.getElementById('filaFechasHeader');
+            let html = '<th style="min-width: 220px;" class="text-start ps-3 sticky-col">Concepto / Proveedor</th>';
+            for (let d = 1; d <= totalDias; d++) {
+                const diaStr = d < 10 ? `0${d}/${strMes}` : `${d}/${strMes}`;
+                html += `<th style="min-width: 80px;">${diaStr}</th>`;
+            }
+            header.innerHTML = html;
+        }
+
+        function cambiarMes() {
+            const mesVal = parseInt(document.getElementById('selectMes').value, 10);
+            document.getElementById('labelHeroMes').innerText = `${(nombresMeses[mesVal] || 'MES').toUpperCase()} PENDIENTE`;
+            generarColumnasDias();
+            cargarMatriz();
+            cargarMontosMesesFuturos();
+        }
+
+        async function cargarMontosMesesFuturos() {
+            const mesActual = parseInt(document.getElementById('selectMes').value, 10);
+            for (let i = 1; i <= 3; i++) {
+                let mesFuturo = mesActual + i;
+                if (mesFuturo > 12) mesFuturo = mesFuturo - 12;
+                const lblElement = document.getElementById(`lblMesFuturo${i}`);
+                const montoElement = document.getElementById(`montoMesFuturo${i}`);
+                lblElement.innerText = nombresMeses[mesFuturo] || `Mes ${mesFuturo}`;
+                montoElement.innerText = '...';
+                try {
+                    const res = await fetch(`/api/facturas/matriz?mes=${mesFuturo}`);
+                    const data = await res.json();
+                    let totalProvMes = 0;
+                    (data.programadas || []).forEach(p => {
+                        if (p.fecha_pago_programada) {
+                            const mesDoc = parseInt(p.fecha_pago_programada.split('-')[1], 10);
+                            if (mesDoc === mesFuturo) { totalProvMes += Number(p.monto_pendiente || p.monto || 0); }
+                        }
+                    });
+                    let totalCheqMes = 0;
+                    (data.cheques || []).forEach(c => {
+                        if (c.fecha) {
+                            const mesCheq = parseInt(c.fecha.split('-')[1], 10);
+                            if (mesCheq === mesFuturo) { totalCheqMes += Number(c.monto || 0); }
+                        }
+                    });
+                    let totalFijosMes = 0;
+                    (data.gastosFijos || []).forEach(g => {
+                        if (g.fecha_pago_programada) {
+                            const mesGF = parseInt(g.fecha_pago_programada.split('-')[1], 10);
+                            if (mesGF === mesFuturo) { totalFijosMes += Number(g.monto || 0); }
+                        }
+                    });
+                    const totalDeudaMes = totalProvMes + totalCheqMes + totalFijosMes;
+                    montoElement.innerText = `$${totalDeudaMes.toLocaleString('es-CL')}`;
+                } catch (err) { montoElement.innerText = '$0'; }
+            }
+        }
+
+        async function sincronizarCheques() {
+            const btn = document.getElementById('btnSyncCheques');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Sincronizando...`;
+            try {
+                const res = await fetch('/api/cheques/sincronizar', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.exito) {
+                    alert(`✅ ¡Éxito!\n${data.mensaje}`);
+                    cargarMatriz();
+                    cargarMontosMesesFuturos();
+                } else {
+                    alert(`⚠️ Error: ${data.error || 'No se pudo sincronizar la planilla.'}`);
+                }
+            } catch (err) {
+                alert(`❌ Error de conexión: ${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-arrow-repeat me-1"></i> Sincronizar Cheques`;
+            }
+        }
+
+        function buscarSugerencias(texto) {
+            clearTimeout(timerBusqueda);
+            const contenedor = document.getElementById('listaSugerencias');
+            if (!texto || texto.trim().length < 2) { contenedor.style.display = 'none'; return; }
+            timerBusqueda = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/facturas/buscar-proveedor?q=${encodeURIComponent(texto)}`);
+                    const lista = await res.json();
+                    if (!lista || !lista.length) {
+                        contenedor.innerHTML = '<div class="list-group-item p-2 small text-muted">Sin coincidencias</div>';
+                        contenedor.style.display = 'block';
+                        return;
+                    }
+                    contenedor.innerHTML = lista.map(p => `
+                        <button type="button" class="list-group-item list-group-item-action p-2 small" onclick="seleccionarProveedor('${p.proveedor_rut}', '${p.proveedor_nombre.replace(/'/g, "\\'")}')">
+                            <div class="fw-bold text-dark">${p.proveedor_nombre}</div>
+                            <small class="text-muted">${p.proveedor_rut}</small>
+                        </button>
+                    `).join('');
+                    contenedor.style.display = 'block';
+                } catch (err) { console.error(err); }
+            }, 250);
+        }
+
+        function actualizarTotalSeleccionado() {
+            const checkboxes = document.querySelectorAll('.chk-factura:checked');
+            let total = 0;
+            checkboxes.forEach(chk => { const factura = facturasObtenidas[chk.value]; if (factura) total += Number(factura.saldo !== undefined ? factura.saldo : factura.monto || 0); });
+            document.getElementById('cantSeleccionadas').innerText = `${checkboxes.length} sel.`;
+            document.getElementById('montoTotalSeleccionado').innerText = `$${total.toLocaleString('es-CL')}`;
+            document.getElementById('montoAbonoInput').value = total > 0 ? total : '';
+        }
+
+        async function seleccionarProveedor(rut, nombre) {
+            document.getElementById('inputBuscador').value = nombre;
+            document.getElementById('rutSeleccionado').value = rut;
+            document.getElementById('listaSugerencias').style.display = 'none';
+            document.getElementById('cantSeleccionadas').innerText = '0 sel.';
+            document.getElementById('montoTotalSeleccionado').innerText = '$0';
+            document.getElementById('montoAbonoInput').value = '';
+            const contFacturas = document.getElementById('contenedorFacturasProveedor');
+            const listaCheck = document.getElementById('listaFacturasCheck');
+            listaCheck.innerHTML = '<div class="p-3 text-center text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas...</div>';
+            contFacturas.style.display = 'block';
+            try {
+                const res = await fetch(`/api/facturas/pendientes/${encodeURIComponent(rut)}`);
+                facturasObtenidas = await res.json();
+                if (!facturasObtenidas.length) {
+                    listaCheck.innerHTML = '<div class="p-2 text-center text-muted border rounded bg-light">No hay facturas pendientes.</div>';
+                    return;
+                }
+                listaCheck.innerHTML = facturasObtenidas.map((f, i) => {
+                    const montoMostrar = Number(f.saldo !== undefined ? f.saldo : f.monto || 0);
+                    return `
+                        <div class="invoice-item p-2 mb-2">
+                            <label class="d-flex align-items-center justify-content-between cursor-pointer w-100 m-0" style="cursor:pointer;">
+                                <div class="d-flex align-items-start gap-2">
+                                    <input class="form-check-input chk-factura mt-1" type="checkbox" value="${i}" onchange="actualizarTotalSeleccionado()">
+                                    <div>
+                                        <div class="fw-bold text-dark" style="font-size: 0.83rem;">N° ${f.numero_doc}</div>
+                                        <div class="d-flex flex-wrap gap-1 mt-1" style="font-size: 0.7rem;">
+                                            <span class="badge bg-light text-secondary border fw-normal">Crea: <strong>${formatearFecha(f.fecha_emision || f.fecha_documento || f.fecha_creacion)}</strong></span>
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-normal">Venc: <strong>${formatearFecha(f.fecha_vencimiento || f.vencimiento)}</strong></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <span class="fw-bold text-primary d-block" style="font-size: 0.88rem;">$${montoMostrar.toLocaleString('es-CL')}</span>
+                                </div>
+                            </label>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                listaCheck.innerHTML = `<div class="p-2 text-danger small">Error: ${err.message}</div>`;
+            }
+        }
+
+        async function programarFacturas() {
+            const fechaPago = document.getElementById('fechaPago').value;
+            const montoAbono = document.getElementById('montoAbonoInput').value;
+            if (!fechaPago) return alert('Seleccione la fecha de pago programada');
+            const checkboxes = document.querySelectorAll('.chk-factura:checked');
+            if (!checkboxes.length) return alert('Seleccione al menos una factura');
+            const seleccionadas = Array.from(checkboxes).map(chk => facturasObtenidas[chk.value]);
+            try {
+                const res = await fetch('/api/facturas/programar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        facturas: seleccionadas, 
+                        fecha_pago_programada: fechaPago,
+                        monto_abono: montoAbono 
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('msgProgramar').innerHTML = `<div class="alert alert-success p-2 small mt-2 rounded-2">${data.mensaje}</div>`;
+                    document.getElementById('contenedorFacturasProveedor').style.display = 'none';
+                    document.getElementById('inputBuscador').value = '';
+                    document.getElementById('cantSeleccionadas').innerText = '0 sel.';
+                    document.getElementById('montoTotalSeleccionado').innerText = '$0';
+                    document.getElementById('montoAbonoInput').value = '';
+                    cargarMatriz();
+                    cargarMontosMesesFuturos();
+                    if (labSeleccionadoActivo.rut) cargarConsultaLaboratorio();
+                } else {
+                    document.getElementById('msgProgramar').innerHTML = `<div class="alert alert-danger p-2 small mt-2 rounded-2">${data.error}</div>`;
+                }
+            } catch (err) {
+                document.getElementById('msgProgramar').innerHTML = `<div class="alert alert-danger p-2 small mt-2 rounded-2">${err.message}</div>`;
+            }
+        }
+
+   async function cargarMatriz() {
+    const tbody = document.getElementById('cuerpoMatriz');
+    const mesSelect = parseInt(document.getElementById('selectMes').value, 10);
+    const selectAnioElem = document.getElementById('selectAnio');
+    const anioSelect = selectAnioElem ? parseInt(selectAnioElem.value, 10) : new Date().getFullYear();
+
+    const totalDiasMes = obtenerDiasDelMes(mesSelect, anioSelect);
+
+    try {
+        const res = await fetch(`/api/facturas/matriz?mes=${mesSelect}&anio=${anioSelect}`);
+        const data = await res.json();
+        datosMatrizGlobal = data;
+
+        const programadas = data.programadas || [];
+        const cheques = data.cheques || [];
+        const gastosFijos = data.gastosFijos || [];
+
+        let totalProv = 0;
+        let totalCheq = 0;
+        let totalFijos = 0;
+
+        const escaparTexto = (texto) => (texto || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+        // 1. PROCESAR PROVEEDORES
+        const porProveedor = {};
+        programadas.forEach(p => {
+            if (!p.fecha_pago_programada) return;
+            const fechaLimpia = String(p.fecha_pago_programada).split('T')[0];
+            const [anio, mes, dia] = fechaLimpia.split('-').map(Number);
+
+            if (mes === mesSelect) {
+                const prov = p.proveedor_nombre || 'Sin Nombre';
+                if (!porProveedor[prov]) porProveedor[prov] = {};
+                const diaKey = dia < 10 ? `0${dia}` : `${dia}`;
+                if (!porProveedor[prov][diaKey]) {
+                    porProveedor[prov][diaKey] = { pendiente: 0, totalItems: 0, pagados: 0 };
+                }
+
+                const monto = Number(p.monto_pendiente || p.monto || 0);
+                porProveedor[prov][diaKey].totalItems++;
+
+                if (p.estado === 'pagado') {
+                    porProveedor[prov][diaKey].pagados++;
+                } else {
+                    porProveedor[prov][diaKey].pendiente += monto;
+                    totalProv += monto;
+                }
+            }
+        });
+
+        // 2. PROCESAR CHEQUES
+        const porDiaCheques = {};
+        cheques.forEach(c => {
+            if (!c.fecha) return;
+            const fechaLimpia = String(c.fecha).split('T')[0];
+            const [anio, mes, dia] = fechaLimpia.split('-').map(Number);
+
+            if (mes === mesSelect) {
+                const diaKey = dia < 10 ? `0${dia}` : `${dia}`;
+                if (!porDiaCheques[diaKey]) {
+                    porDiaCheques[diaKey] = { pendiente: 0, totalItems: 0, pagados: 0 };
+                }
+
+                const monto = Number(c.monto) || 0;
+                porDiaCheques[diaKey].totalItems++;
+
+                if (c.estado === 'pagado') {
+                    porDiaCheques[diaKey].pagados++;
+                } else {
+                    porDiaCheques[diaKey].pendiente += monto;
+                    totalCheq += monto;
+                }
+            }
+        });
+
+        // 3. PROCESAR GASTOS FIJOS
+        const porGastoFijo = {};
+        gastosFijos.forEach(g => {
+            if (!g.fecha_pago_programada) return;
+            const fechaLimpia = String(g.fecha_pago_programada).split('T')[0];
+            const [anio, mes, dia] = fechaLimpia.split('-').map(Number);
+
+            if (mes === mesSelect) {
+                const concepto = g.concepto || 'Sin Concepto';
+                if (!porGastoFijo[concepto]) porGastoFijo[concepto] = {};
+                const diaKey = dia < 10 ? `0${dia}` : `${dia}`;
+                if (!porGastoFijo[concepto][diaKey]) {
+                    porGastoFijo[concepto][diaKey] = { pendiente: 0, totalItems: 0, pagados: 0 };
+                }
+
+                const monto = Number(g.monto) || 0;
+                porGastoFijo[concepto][diaKey].totalItems++;
+
+                if (g.estado === 'pagado') {
+                    porGastoFijo[concepto][diaKey].pagados++;
+                } else {
+                    porGastoFijo[concepto][diaKey].pendiente += monto;
+                    totalFijos += monto;
+                }
+            }
+        });
+
+        // ACTUALIZAR SIDEBAR
+        const totalPendiente = totalProv + totalCheq + totalFijos;
+        document.getElementById('totalPendiente').innerText = `$${totalPendiente.toLocaleString('es-CL')}`;
+        document.getElementById('resumenProv').innerText = `$${totalProv.toLocaleString('es-CL')}`;
+        document.getElementById('resumenCheq').innerText = `$${totalCheq.toLocaleString('es-CL')}`;
+        document.getElementById('resumenFijos').innerText = `$${totalFijos.toLocaleString('es-CL')}`;
+
+        // HELPER PARA RENDERIZAR CELDAS EN LA TABLA
+        function renderCelda(infoDia, tipo, entidadEscaped, fechaCompleta) {
+            if (!infoDia || infoDia.totalItems === 0) {
+                return `<td class="text-center text-muted" style="opacity: 0.3;">-</td>`;
+            }
+
+            // Si TODO está pagado para este día
+            if (infoDia.pagados === infoDia.totalItems) {
+                return `<td class="text-center">
+                    <span class="badge bg-success-subtle text-success border border-success px-2 py-1 cursor-pointer" 
+                          title="Todos los ítems pagados. Clic para ver/revertir" 
+                          onclick="abrirModalDetalle('${tipo}', '${entidadEscaped}', '${fechaCompleta}')">
+                        <i class="bi bi-check-circle-fill me-1"></i>OK
+                    </span>
+                </td>`;
+            }
+
+            // Si hay monto PENDIENTE (haya o no otros ya pagados)
+            let badgeClass = 'monto-badge';
+            if (tipo === 'CHEQUE') badgeClass = 'monto-badge-cheque';
+            if (tipo === 'GASTO_FIJO') badgeClass = 'monto-badge-gasto';
+
+            // Muestra el monto que resta por pagar
+            return `<td class="text-center">
+                <span class="${badgeClass}" onclick="abrirModalDetalle('${tipo}', '${entidadEscaped}', '${fechaCompleta}')">
+                    $${infoDia.pendiente.toLocaleString('es-CL')}
+                </span>
+            </td>`;
+        }
+
+        let html = '';
+        const strMes = mesSelect < 10 ? `0${mesSelect}` : `${mesSelect}`;
+
+        // SECCIÓN 1: CHEQUES
+        html += `<tr class="table-warning fw-bold text-dark"><td colspan="${totalDiasMes + 1}" class="ps-3 text-uppercase sticky-col" style="font-size: 0.75rem;"><i class="bi bi-bank me-1 text-warning"></i> Cheques a Pagar</td></tr>`;
+        html += `<tr><td class="fw-semibold ps-3 text-truncate sticky-col" style="max-width:220px;">Total Cheques del Día</td>`;
+        for (let d = 1; d <= totalDiasMes; d++) {
+            const diaKey = d < 10 ? `0${d}` : `${d}`;
+            const fechaCompleta = `${anioSelect}-${strMes}-${diaKey}`;
+            html += renderCelda(porDiaCheques[diaKey], 'CHEQUE', 'Todos los Proveedores', fechaCompleta);
+        }
+        html += `</tr>`;
+
+        // SECCIÓN 2: PROVEEDORES
+        html += `<tr class="table-light fw-bold text-dark"><td colspan="${totalDiasMes + 1}" class="ps-3 text-uppercase sticky-col" style="font-size: 0.75rem;"><i class="bi bi-building me-1 text-primary"></i> Proveedores</td></tr>`;
+        const nombresProv = Object.keys(porProveedor).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+        if (!nombresProv.length) {
+            html += `<tr><td colspan="${totalDiasMes + 1}" class="text-center text-muted py-3">No hay facturas asignadas para este mes.</td></tr>`;
+        } else {
+            nombresProv.forEach(prov => {
+                const provEscaped = escaparTexto(prov);
+                html += `<tr><td class="fw-semibold ps-3 text-truncate sticky-col" style="max-width:220px;">${prov}</td>`;
+                for (let d = 1; d <= totalDiasMes; d++) {
+                    const diaKey = d < 10 ? `0${d}` : `${d}`;
+                    const fechaCompleta = `${anioSelect}-${strMes}-${diaKey}`;
+                    html += renderCelda(porProveedor[prov][diaKey], 'FACTURA', provEscaped, fechaCompleta);
+                }
+                html += `</tr>`;
+            });
+        }
+
+        // SECCIÓN 3: GASTOS FIJOS
+        html += `<tr class="table-danger fw-bold text-dark"><td colspan="${totalDiasMes + 1}" class="ps-3 text-uppercase sticky-col" style="font-size: 0.75rem;"><i class="bi bi-dash-circle me-1 text-danger"></i> Gastos Fijos</td></tr>`;
+        const conceptosFijos = Object.keys(porGastoFijo).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+        if (!conceptosFijos.length) {
+            html += `<tr><td colspan="${totalDiasMes + 1}" class="text-center text-muted py-3">No hay gastos fijos programados para este mes.</td></tr>`;
+        } else {
+            conceptosFijos.forEach(concepto => {
+                const conceptoEscaped = escaparTexto(concepto);
+                html += `<tr><td class="fw-semibold ps-3 text-truncate sticky-col" style="max-width:220px;">${concepto}</td>`;
+                for (let d = 1; d <= totalDiasMes; d++) {
+                    const diaKey = d < 10 ? `0${d}` : `${d}`;
+                    const fechaCompleta = `${anioSelect}-${strMes}-${diaKey}`;
+                    html += renderCelda(porGastoFijo[concepto][diaKey], 'GASTO_FIJO', conceptoEscaped, fechaCompleta);
+                }
+                html += `</tr>`;
+            });
+        }
+
+        tbody.innerHTML = html;
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="32" class="text-danger p-3">Error al cargar matriz: ${err.message}</td></tr>`;
+    }
+}
+
+
+        // --- LÓGICA DEL MODAL INTERACTIVO DETALLE ---
+function abrirModalDetalle(tipo, proveedor, fecha) {
+    const tituloModal = document.getElementById('tituloModalDetalle');
+    const cuerpoModal = document.getElementById('cuerpoModalDetalle');
+    
+    let labelTipo = 'Facturas';
+    if (tipo === 'CHEQUE') labelTipo = 'Cheques';
+    if (tipo === 'GASTO_FIJO') labelTipo = 'Gastos Fijos';
+
+    let items = [];
+    if (tipo === 'CHEQUE') { 
+        items = (datosMatrizGlobal.cheques || []).filter(c => c.fecha === fecha); 
+    } else if (tipo === 'FACTURA') { 
+        items = (datosMatrizGlobal.programadas || []).filter(p => p.fecha_pago_programada === fecha && p.proveedor_nombre === proveedor); 
+    } else if (tipo === 'GASTO_FIJO') {
+        items = (datosMatrizGlobal.gastosFijos || []).filter(g => g.fecha_pago_programada === fecha && g.concepto === proveedor);
+    }
+
+    // Verificar si hay elementos pendientes para mostrar el botón "Pagar Todo"
+    const hayPendientes = items.some(item => item.estado !== 'pagado');
+    const provTexto = (proveedor && tipo !== 'CHEQUE') ? ' - ' + proveedor : '';
+
+    // HTML del título estructurado sin comillas anidadas conflictivas
+    let htmlBotonPagarTodo = '';
+    if (hayPendientes) {
+        htmlBotonPagarTodo = `<button class="btn btn-sm btn-success fw-bold" onclick="pagarTodo('${tipo}', '${proveedor || ''}', '${fecha}')"><i class="bi bi-check-all me-1"></i> Pagar Todo</button>`;
+    }
+
+    tituloModal.innerHTML = `
+        <div class="d-flex align-items-center justify-content-between w-100 me-3">
+            <span><i class="bi bi-journal-text me-2"></i> ${labelTipo} del ${formatearFecha(fecha)} ${provTexto}</span>
+            ${htmlBotonPagarTodo}
+        </div>
+    `;
+
+    if (!items.length) {
+        cuerpoModal.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted">No se encontraron documentos en esta fecha.</td></tr>`;
+        modalDetalleInstance.show();
+        return;
+    }
+
+    cuerpoModal.innerHTML = items.map(item => {
+        const idItem = item.id;
+        let docNombre = `Factura N° ${item.numero_doc || item.id}`;
+        if (tipo === 'CHEQUE') docNombre = `Cheque N° ${item.numero_cheque}`;
+        if (tipo === 'GASTO_FIJO') docNombre = item.concepto;
+
+        const provNombre = item.proveedor || item.proveedor_nombre || proveedor || 'N/A';
+        const monto = Number(item.monto || item.monto_pendiente || 0);
+        const esPagado = item.estado === 'pagado';
+
+        return `
+            <tr class="${esPagado ? 'table-secondary opacity-75' : ''}">
+                <td><strong>${docNombre}</strong></td>
+                <td>${provNombre}</td>
+                <td class="fw-bold text-primary">$${monto.toLocaleString('es-CL')}</td>
+                <td style="width: 140px;">
+                    <input type="date" id="fecha_${tipo}_${idItem}" value="${fecha}" class="form-control form-control-sm" ${esPagado ? 'disabled' : ''}>
+                </td>
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                        ${esPagado ? `
+                            <span class="btn btn-sm btn-success disabled opacity-100 me-1">
+                                <i class="bi bi-check-circle-fill"></i> Pagado
+                            </span>
+                            <button class="btn btn-outline-secondary" onclick="revertirPago('${tipo}', '${idItem}')" title="Revertir pago a Pendiente">
+                                <i class="bi bi-arrow-counterclockwise"></i> Revertir
+                            </button>
+                        ` : `
+                            <button class="btn btn-success" onclick="marcarComoPagado('${tipo}', '${idItem}')" title="Marcar como Pagado">
+                                <i class="bi bi-check-lg"></i> Pagar
+                            </button>
+                        `}
+                        <button class="btn btn-outline-primary" onclick="cambiarFechaDocumento('${tipo}', '${idItem}')" title="Guardar nueva fecha" ${esPagado ? 'disabled' : ''}>
+                            <i class="bi bi-calendar-event"></i> Move
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="eliminarDocumento('${tipo}', '${idItem}')" title="Eliminar del flujo">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    modalDetalleInstance.show();
+}
+async function pagarTodo(tipo, proveedor, fecha) {
+    if (!confirm(`¿Estás seguro de marcar TODOS los registros de este grupo como PAGADOS?`)) return;
+
+    try {
+        let url = `/api/facturas/pagar-todo`;
+        if (tipo === 'CHEQUE') url = `/api/cheques/pagar-todo`;
+        if (tipo === 'GASTO_FIJO') url = `/api/gastos-fijos/pagar-todo`;
+
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fecha, proveedor })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert('✅ Todos los registros fueron marcados como pagados.');
+            modalDetalleInstance.hide();
+            cargarMatriz();
+            if (typeof cargarMontosMesesFuturos === 'function') cargarMontosMesesFuturos();
+            if (typeof labSeleccionadoActivo !== 'undefined' && labSeleccionadoActivo.rut) cargarConsultaLaboratorio();
+        } else {
+            alert(`⚠️ Error: ${data.error || 'No se pudo actualizar los registros.'}`);
+        }
+    } catch (err) {
+        alert(`❌ Error de red: ${err.message}`);
+    }
+}
+
+
+async function revertirPago(tipo, id) {
+    if (!confirm('¿Deseas REVERTIR este pago y volver a dejarlo como PENDIENTE?')) return;
+    try {
+        let url = `/api/facturas/revertir-pago/${id}`;
+        if (tipo === 'CHEQUE') url = `/api/cheques/revertir-pago/${id}`;
+        if (tipo === 'GASTO_FIJO') url = `/api/gastos-fijos/revertir-pago/${id}`;
+
+        const res = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+
+        if (res.ok) { 
+            alert('🔄 Registro vuelto a pendiente.'); 
+
+            // Cerrar el modal solo si está abierto o instanciado
+            if (typeof modalDetalleInstance !== 'undefined' && modalDetalleInstance._isShown) {
+                modalDetalleInstance.hide(); 
+            }
+
+            // Recargar datos globales del flujo de caja
+            if (typeof cargarMatriz === 'function') cargarMatriz(); 
+            if (typeof cargarMontosMesesFuturos === 'function') cargarMontosMesesFuturos(); 
+
+            // Recargar la vista de laboratorio si hay uno seleccionado (por RUT o por Nombre)
+            if (typeof labSeleccionadoActivo !== 'undefined' && (labSeleccionadoActivo.rut || labSeleccionadoActivo.nombre)) {
+                cargarConsultaLaboratorio(); 
+            }
+        } else {
+            alert(`⚠️ Error: ${data.error || 'No se pudo actualizar.'}`);
+        }
+    } catch (err) {
+        alert(`❌ Error de red: ${err.message}`);
+    }
+}
+
+
+
+        async function marcarComoPagado(tipo, id) {
+            if (!confirm('¿Deseas marcar este registro como PAGADO?')) return;
+            try {
+                let url = `/api/facturas/pagar/${id}`;
+                if (tipo === 'CHEQUE') url = `/api/cheques/pagar/${id}`;
+                if (tipo === 'GASTO_FIJO') url = `/api/gastos-fijos/pagar/${id}`;
+
+                const res = await fetch(url, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) { 
+                    alert('✅ Registro marcado como pagado.'); 
+                    modalDetalleInstance.hide(); 
+                    cargarMatriz(); 
+                    cargarMontosMesesFuturos(); 
+                    if (labSeleccionadoActivo.rut) cargarConsultaLaboratorio(); 
+                } else {
+                    alert(`⚠️ Error: ${data.error || 'No se pudo actualizar.'}`);
+                }
+            } catch (err) {
+                alert(`❌ Error de red: ${err.message}`);
+            }
+        }
+
+        async function cambiarFechaDocumento(tipo, id) {
+            const inputFecha = document.getElementById(`fecha_${tipo}_${id}`);
+            const nuevaFecha = inputFecha ? inputFecha.value : null;
+            if (!nuevaFecha) return alert('Selecciona una fecha válida.');
+            try {
+                let url = `/api/facturas/reagendar`;
+                if (tipo === 'CHEQUE') url = `/api/cheques/reagendar`;
+                if (tipo === 'GASTO_FIJO') url = `/api/gastos-fijos/reagendar`;
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, fecha: nuevaFecha })
+                });
+                const data = await res.json();
+                if (res.ok) { 
+                    alert('✅ Fecha actualizada correctamente.'); 
+                    modalDetalleInstance.hide(); 
+                    cargarMatriz(); 
+                    cargarMontosMesesFuturos(); 
+                    if (labSeleccionadoActivo.rut) cargarConsultaLaboratorio(); 
+                } else {
+                    alert(`⚠️ Error: ${data.error || 'No se pudo reagendar.'}`);
+                }
+            } catch (err) {
+                alert(`❌ Error de red: ${err.message}`);
+            }
+        }
+
+        async function eliminarDocumento(tipo, id) {
+            if (!confirm('¿Estás seguro de ELIMINAR este documento del flujo de caja?')) return;
+            try {
+                let url = `/api/facturas/${id}`;
+                if (tipo === 'CHEQUE') url = `/api/cheques/${id}`;
+                if (tipo === 'GASTO_FIJO') url = `/api/gastos-fijos/${id}`;
+
+                const res = await fetch(url, { method: 'DELETE' });
+                const data = await res.json();
+                if (res.ok) { 
+                    alert('🗑️ Registro eliminado correctamente.'); 
+                    modalDetalleInstance.hide(); 
+                    cargarMatriz(); 
+                    cargarMontosMesesFuturos(); 
+                    if (labSeleccionadoActivo.rut) cargarConsultaLaboratorio(); 
+                } else {
+                    alert(`⚠️ Error: ${data.error || 'No se pudo eliminar.'}`);
+                }
+            } catch (err) {
+                alert(`❌ Error de red: ${err.message}`);
+            }
+        }
+
+       // --- LÓGICA DE GASTOS FIJOS (MODAL) ---
+async function abrirModalGastosFijos() {
+    if (!modalGFInstance) {
+        modalGFInstance = new bootstrap.Modal(document.getElementById('modalGastosFijos'));
+    }
+    const alerta = document.getElementById('alertaGastosFijos');
+    if (alerta) alerta.classList.add('d-none');
+
+    await cargarCatalogoGastosFijos();
+    modalGFInstance.show();
+}
+
+async function cargarCatalogoGastosFijos() {
+    const tbody = document.getElementById('tablaGastosFijosBody');
+    const mesSeleccionado = document.getElementById('selectMes') ? document.getElementById('selectMes').value : new Date().getMonth() + 1;
+
+    try {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando catálogo...</td></tr>';
+
+        // 1. Cargar el catálogo base y los gastos ya programados del mes en paralelo
+        const [resCatalogo, resProgramados] = await Promise.all([
+            fetch('/api/gastos-fijos/catalogo'),
+            fetch(`/api/gastos-fijos/programados?mes=${mesSeleccionado}`).catch(() => null)
+        ]);
+
+        if (!resCatalogo.ok) {
+            const errData = await resCatalogo.json().catch(() => ({}));
+            throw new Error(errData.error || 'Error al obtener catálogo');
+        }
+
+        const datos = await resCatalogo.json();
+        let programados = [];
+
+        if (resProgramados && resProgramados.ok) {
+            programados = await resProgramados.json();
+        }
+
+        if (!datos || datos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No hay gastos fijos configurados.</td></tr>';
+            return;
+        }
+
+        // 2. Renderizar filas cruzando la información
+        tbody.innerHTML = datos.map(gasto => {
+            // Buscamos si este concepto ya fue agendado en el mes actual
+            const yaProgramado = programados.find(p => p.concepto === gasto.concepto);
+
+            const montoMostrar = yaProgramado ? yaProgramado.monto : (gasto.monto_promedio || 0);
+            const fechaMostrar = yaProgramado ? yaProgramado.fecha_pago_programada || yaProgramado.fecha : '';
+
+            // Badge/Aviso visual si ya existe asignación
+            const avisoHTML = yaProgramado ? `
+                <div class="mt-1">
+                    <span class="badge bg-warning text-dark style-badge" style="font-size: 0.65rem;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Asignado este mes ($${Number(yaProgramado.monto).toLocaleString('es-CL')})
+                    </span>
+                </div>
+            ` : '';
+
+            return `
+                <tr>
+                    <td class="fw-semibold align-middle">
+                        ${gasto.concepto}
+                        <input type="hidden" class="gf-concepto" value="${gasto.concepto}">
+                        ${avisoHTML}
+                    </td>
+                    <td class="align-middle">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control text-end fw-bold gf-monto" value="${montoMostrar}" min="0">
+                        </div>
+                    </td>
+                    <td class="align-middle">
+                        <input type="date" class="form-control form-control-sm gf-fecha" value="${fechaMostrar}">
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error("Error al cargar catálogo de gastos fijos:", err);
+        tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-3"><i class="bi bi-exclamation-circle me-1"></i>Error: ${err.message}</td></tr>`;
+    }
+}
+
+async function guardarGastosFijosProgramados() {
+    const filas = document.querySelectorAll('#tablaGastosFijosBody tr');
+    const gastosAEnviar = [];
+
+    filas.forEach(fila => {
+        const conceptoInput = fila.querySelector('.gf-concepto');
+        const montoInput = fila.querySelector('.gf-monto');
+        const fechaInput = fila.querySelector('.gf-fecha');
+
+        if (conceptoInput && montoInput && fechaInput) {
+            const concepto = conceptoInput.value;
+            const monto = parseFloat(montoInput.value) || 0;
+            const fecha = fechaInput.value;
+
+            if (fecha && monto > 0) {
+                gastosAEnviar.push({
+                    concepto: concepto,
+                    monto: monto,
+                    fecha_pago_programada: fecha
+                });
+            }
+        }
+    });
+
+    const alerta = document.getElementById('alertaGastosFijos');
+
+    if (gastosAEnviar.length === 0) {
+        alerta.className = 'alert alert-warning py-2 mb-3 small';
+        alerta.textContent = 'Selecciona una fecha a programar y un monto mayor a $0 en al menos un gasto.';
+        alerta.classList.remove('d-none');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/gastos-fijos/programar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gastos: gastosAEnviar })
+        });
+
+        const respuesta = await res.json();
+
+        if (!res.ok || !respuesta.exito) {
+            throw new Error(respuesta.error || 'Ocurrió un error al guardar');
+        }
+
+        alerta.className = 'alert alert-success py-2 mb-3 small';
+        alerta.textContent = respuesta.mensaje || 'Gastos fijos programados correctamente.';
+        alerta.classList.remove('d-none');
+
+        // Volvemos a cargar la matriz y actualizar las cards del encabezado
+        cargarMatriz();
+        if (typeof cargarMontosMesesFuturos === 'function') {
+            cargarMontosMesesFuturos();
+        }
+
+        // Re-cargamos la tabla dentro del modal para refrescar los avisos visuales
+        setTimeout(() => {
+            cargarCatalogoGastosFijos();
+        }, 800);
+
+    } catch (err) {
+        alerta.className = 'alert alert-danger py-2 mb-3 small';
+        alerta.textContent = err.message;
+        alerta.classList.remove('d-none');
+    }
+}
+
+async function agregarNuevoGastoCatalogo() {
+    const concepto = prompt('Ingrese el nombre del nuevo Gasto Fijo:');
+    if (!concepto || concepto.trim() === '') return;
+
+    const montoStr = prompt(`Ingrese el monto promedio para "${concepto}":`, '0');
+    const monto = parseFloat(montoStr) || 0;
+
+    try {
+        const res = await fetch('/api/gastos-fijos/catalogo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ concepto: concepto.trim(), monto_promedio: monto })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al guardar');
+
+        await cargarCatalogoGastosFijos();
+    } catch (err) {
+        alert('Error al agregar gasto: ' + err.message);
+    }
+}
+
+        // --- LÓGICA CONSULTA POR LABORATORIO ---
+        function buscarSugerenciasLab(texto) {
+            const contenedor = document.getElementById('listaSugerenciasLab');
+            if (!texto || texto.trim().length < 2) { contenedor.style.display = 'none'; return; }
+            setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/facturas/buscar-proveedor?q=${encodeURIComponent(texto)}`);
+                    const lista = await res.json();
+                    if (!lista || !lista.length) {
+                        contenedor.innerHTML = '<div class="list-group-item p-2 small text-muted">Sin coincidencias</div>';
+                        contenedor.style.display = 'block';
+                        return;
+                    }
+                    contenedor.innerHTML = lista.map(p => `
+                        <button type="button" class="list-group-item list-group-item-action p-2 small" onclick="seleccionarLabConsulta('${p.proveedor_rut}', '${p.proveedor_nombre.replace(/'/g, "\\'")}')">
+                            <div class="fw-bold text-dark">${p.proveedor_nombre}</div>
+                            <small class="text-muted">${p.proveedor_rut}</small>
+                        </button>
+                    `).join('');
+                    contenedor.style.display = 'block';
+                } catch (err) { console.error(err); }
+            }, 250);
+        }
+
+        function seleccionarLabConsulta(rut, nombre) {
+            document.getElementById('inputLabBuscador').value = nombre;
+            document.getElementById('labRutSeleccionado').value = rut;
+            document.getElementById('listaSugerenciasLab').style.display = 'none';
+            labSeleccionadoActivo = { rut, nombre };
+            cargarConsultaLaboratorio();
+        }
+
+       async function cargarConsultaLaboratorio() {
+    if (!labSeleccionadoActivo.rut && !labSeleccionadoActivo.nombre) return;
+    const tablaAgendadas = document.getElementById('tablaAgendadasLab');
+    const tablaPorAgendar = document.getElementById('tablaPorAgendarLab');
+    const estadoFiltro = document.getElementById('selectEstadoFlujo').value;
+    
+    tablaAgendadas.innerHTML = '<tr><td colspan="7" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas...</td></tr>';
+    tablaPorAgendar.innerHTML = '<tr><td colspan="6" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas sin agendar...</td></tr>';
+    
+    try {
+        const res = await fetch(`/api/facturas/consulta-laboratorio?rut=${encodeURIComponent(labSeleccionadoActivo.rut)}&nombre=${encodeURIComponent(labSeleccionadoActivo.nombre)}`);
+        const data = await res.json();
+        if (!data.exito) throw new Error(data.error);
+
+        let agendadasFiltradas = data.agendadas || [];
+        if (estadoFiltro !== 'todos') { 
+            agendadasFiltradas = agendadasFiltradas.filter(a => (a.estado || 'pendiente') === estadoFiltro); 
+        }
+
+        let totalAgendado = 0;
+        if (!agendadasFiltradas.length) {
+            tablaAgendadas.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No hay facturas agendadas para los criterios seleccionados.</td></tr>';
+        } else {
+            tablaAgendadas.innerHTML = agendadasFiltradas.map(f => {
+                const monto = Number(f.monto_pendiente || f.monto || 0);
+                totalAgendado += monto;
+                const idItem = f.id;
+                const fechaActual = f.fecha_pago_programada ? f.fecha_pago_programada.split('T')[0] : '';
+                const esPagado = f.estado === 'pagado';
+
+                return `
+                    <tr class="${esPagado ? 'table-secondary opacity-75' : ''}">
+                        <td><strong>${formatearFecha(f.fecha_pago_programada)}</strong></td>
+                        <td>N° ${f.numero_doc || f.id}</td>
+                        <td>${f.proveedor_nombre}</td>
+                        <td><span class="badge ${esPagado ? 'bg-success' : 'bg-warning text-dark'}">${f.estado || 'pendiente'}</span></td>
+                        <td class="fw-bold text-primary">$${monto.toLocaleString('es-CL')}</td>
+                        <td style="width: 140px;">
+                            <input type="date" id="fecha_FACTURA_${idItem}" value="${fechaActual}" class="form-control form-control-sm" ${esPagado ? 'disabled' : ''}>
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                ${esPagado ? `
+                                    <button class="btn btn-outline-secondary" onclick="revertirPago('FACTURA', '${idItem}')" title="Revertir a Pendiente">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Revertir
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-success" onclick="marcarComoPagado('FACTURA', '${idItem}')" title="Marcar como Pagado">
+                                        <i class="bi bi-check-lg"></i> Pagado
+                                    </button>
+                                `}
+                                <button class="btn btn-outline-primary" onclick="cambiarFechaDocumento('FACTURA', '${idItem}')" title="Guardar nueva fecha" ${esPagado ? 'disabled' : ''}>
+                                    <i class="bi bi-calendar-event"></i> Move
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="eliminarDocumento('FACTURA', '${idItem}')" title="Eliminar del flujo">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        document.getElementById('totalMontoAgendado').innerText = `$${totalAgendado.toLocaleString('es-CL')}`;
+
+        const porAgendar = data.porAgendar || [];
+        let totalPorAgendar = 0;
+        if (!porAgendar.length) {
+            tablaPorAgendar.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">🎉 ¡Excelente! No hay facturas pendientes por agendar para este laboratorio.</td></tr>';
+        } else {
+            tablaPorAgendar.innerHTML = porAgendar.map((f, index) => {
+                const monto = Number(f.saldo !== undefined ? f.saldo : f.monto || 0);
+                totalPorAgendar += monto;
+                return `
+                    <tr>
+                        <td><strong>N° ${f.numero_doc}</strong></td>
+                        <td>${formatearFecha(f.fecha_emision || f.fecha_documento)}</td>
+                        <td><span class="text-danger fw-semibold">${formatearFecha(f.fecha_vencimiento || f.vencimiento)}</span></td>
+                        <td class="fw-bold text-dark">$${monto.toLocaleString('es-CL')}</td>
+                        <td><input type="date" id="fechaAgendar_${index}" class="form-control form-control-sm"></td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-primary fw-bold" onclick="agendarDirecto(${index}, '${encodeURIComponent(JSON.stringify(f))}')">
+                                <i class="bi bi-calendar-plus me-1"></i> Agendar
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        document.getElementById('totalMontoPorAgendar').innerText = `$${totalPorAgendar.toLocaleString('es-CL')}`;
+
+    } catch (err) {
+        tablaAgendadas.innerHTML = `<tr><td colspan="7" class="text-danger">Error: ${err.message}</td></tr>`;
+        tablaPorAgendar.innerHTML = `<tr><td colspan="6" class="text-danger">Error: ${err.message}</td></tr>`;
+    }
+}
+
+        async function agendarDirecto(index, facturaEncoded) {
+            const factura = JSON.parse(decodeURIComponent(facturaEncoded));
+            const fechaPago = document.getElementById(`fechaAgendar_${index}`).value;
+            if (!fechaPago) return alert('Por favor, selecciona una fecha de pago antes de agendar.');
+            try {
+                const res = await fetch('/api/facturas/programar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ facturas: [factura], fecha_pago_programada: fechaPago })
+                });
+                const data = await res.json();
+                if (res.ok) { 
+                    alert('✅ Factura agendada correctamente en el Flujo de Caja.'); 
+                    cargarConsultaLaboratorio(); 
+                    cargarMatriz(); 
+                    cargarMontosMesesFuturos(); 
+                } else {
+                    alert(`⚠️ Error: ${data.error}`);
+                }
+            } catch (err) {
+                alert(`❌ Error de conexión: ${err.message}`);
+            }
+        }
+
+
+
+
+// Estado de meses expandidos (ej: { 0: true, 1: false })
+let mesesExpandidos = {};
+
+// 3. Función cargarResumenMensual actualizada
+async function cargarResumenMensual() {
+    const tabla = document.getElementById('tablaResumenMensual'); 
+    const anio = document.getElementById('selectAnioResumen')?.value || new Date().getFullYear();
+
+    if (!tabla) return; 
+
+    // Guardar el año en la ventana global
+    window.anioActualGlobal = anio;
+    document.getElementById('anioDeudaResumen').textContent = anio;
+    ['deudaChequesAnual', 'deudaProveedoresAnual', 'deudaGastosAnual', 'montoDeudaAnual']
+        .forEach(id => document.getElementById(id).textContent = 'Cargando…');
+
+    tabla.innerHTML = `<tr><td class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando resumen...</td></tr>`;
+
+    try {
+        const response = await fetch(`/api/resumen-mensual?anio=${anio}`);
+        const res = await response.json();
+
+        if (!res.exito) throw new Error(res.error);
+
+        const matriz = Array.from({ length: 12 }, () => ({
+            cheques: 0, 
+            proveedores: 0, 
+            gastos_fijos: 0, 
+            ventas: 0,
+            cobranza: 0, 
+            total: 0,
+            dias: Array.from({ length: 32 }, () => ({ 
+                cheques: 0, 
+                proveedores: 0, 
+                gastos_fijos: 0, 
+                ventas: 0,
+                cobranza: 0, 
+                total: 0 
+            }))
+        }));
+
+        // Se conserva el detalle separado de la matriz usada por la pestaña Flujo de Caja.
+        window.detalleResumenGlobal = res;
+
+        const acumular = (lista, campoMonto, campoFecha, cat, esIngreso = false) => {
+            if (!lista || !Array.isArray(lista)) return;
+            
+            lista.forEach(item => {
+                const clavesFecha = Array.isArray(campoFecha) ? campoFecha : [campoFecha];
+                let f = null;
+                for (let clave of clavesFecha) {
+                    if (item[clave]) {
+                        f = item[clave];
+                        break;
+                    }
+                }
+
+                if (!f) return;
+                
+                const strFecha = String(f).split('T')[0];
+                const partes = strFecha.split('-');
+                if (partes.length < 3) return;
+
+                const m = parseInt(partes[1], 10) - 1;
+                const d = parseInt(partes[2], 10);
+                const monto = Number(item[campoMonto]) || 0;
+
+                if (m >= 0 && m < 12) {
+                    matriz[m][cat] += monto;
+                    if (matriz[m].dias[d]) {
+                        matriz[m].dias[d][cat] += monto;
+                    }
+
+                    if (!esIngreso) {
+                        matriz[m].total += monto;
+                        if (matriz[m].dias[d]) {
+                            matriz[m].dias[d].total += monto;
+                        }
+                    }
+                }
+            });
+        };
+
+        acumular(res.cheques, 'monto', 'fecha', 'cheques');
+        acumular(res.proveedores, 'monto_pago', 'fecha_pago_programada', 'proveedores');
+        acumular(res.gastos_fijos, 'monto', 'fecha_pago_programada', 'gastos_fijos');
+        acumular(res.ventas, 'monto', ['vencimiento', 'vencimiento_date', 'fecha'], 'ventas', true);
+        acumular(res.cobranza, 'saldo', 'vencimiento', 'cobranza', true);
+
+        const sumarPendientes = (lista, obtenerMonto) => (lista || []).reduce((total, item) =>
+            total + (String(item.estado || '').toLowerCase() === 'pagado' ? 0 : (Number(obtenerMonto(item)) || 0)), 0);
+        const deudaCheques = sumarPendientes(res.cheques, item => item.monto);
+        const deudaProveedores = sumarPendientes(res.proveedores, item => item.monto_pago ?? item.monto_pendiente ?? item.monto);
+        const deudaGastos = sumarPendientes(res.gastos_fijos, item => item.monto);
+        const formatoDeuda = monto => '$' + monto.toLocaleString('es-CL');
+        document.getElementById('deudaChequesAnual').textContent = formatoDeuda(deudaCheques);
+        document.getElementById('deudaProveedoresAnual').textContent = formatoDeuda(deudaProveedores);
+        document.getElementById('deudaGastosAnual').textContent = formatoDeuda(deudaGastos);
+        document.getElementById('montoDeudaAnual').textContent = formatoDeuda(deudaCheques + deudaProveedores + deudaGastos);
+
+        // Guardar la matriz en la propiedad global del navegador
+        window.datosMatrizGlobal = matriz;
+
+        renderizarTablaResumen(window.datosMatrizGlobal, window.anioActualGlobal);
+
+    } catch (err) {
+        console.error('Error al cargar resumen mensual:', err);
+        ['deudaChequesAnual', 'deudaProveedoresAnual', 'deudaGastosAnual', 'montoDeudaAnual']
+            .forEach(id => document.getElementById(id).textContent = 'No disponible');
+        tabla.innerHTML = `<tr><td class="text-center text-danger py-3">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function renderizarTablaResumen(matriz, anio) {
+    const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    
+    const tabla = document.getElementById('tablaResumenMensual') || document.getElementById('tablaResumenAnual');
+
+    if (!tabla) {
+        console.error("No se encontró el elemento <table> para renderizar el resumen.");
+        return;
+    }
+
+    // 1. Construir Encabezados (THEAD)
+    let headerHTML = `<thead class="table-dark text-center"><tr><th class="text-start sticky-col">Concepto / Categoría</th>`;
+
+    nombresMeses.forEach((mes, mIdx) => {
+        const estaExpandido = mesesExpandidos[mIdx];
+        const diasEnMes = new Date(anio, mIdx + 1, 0).getDate();
+
+        // Botón + / -
+        headerHTML += `
+            <th class="bg-primary bg-gradient text-white" style="min-width: 140px;">
+                <div class="d-flex justify-content-between align-items-center px-1">
+                    <span>${mes}</span>
+                    <button class="btn btn-sm btn-light py-0 px-1 border-0 fw-bold" onclick="toggleMes(${mIdx})">
+                        ${estaExpandido ? '−' : '+'}
+                    </button>
+                </div>
+            </th>
+        `;
+
+        if (estaExpandido) {
+            for (let d = 1; d <= diasEnMes; d++) {
+                headerHTML += `<th class="bg-secondary text-white style-dia-header" style="min-width: 80px;">${String(d).padStart(2, '0')}/${String(mIdx + 1).padStart(2, '0')}</th>`;
+            }
+        }
+    });
+
+    headerHTML += `<th class="bg-dark text-white text-end">TOTAL ANUAL</th></tr></thead>`;
+
+    // 2. Construir filas visibles del resumen
+    const categorias = [
+        { id: 'cheques', titulo: '🏦 Cheques a Pagar', class: 'text-primary', rowClass: '' },
+        { id: 'proveedores', titulo: '🏷️ Proveedores', class: 'text-info', rowClass: '' },
+        { id: 'gastos_fijos', titulo: '⛔ Gastos Fijos', class: 'text-danger', rowClass: '' },
+        { id: 'total', titulo: '💰 TOTAL GENERAL (EGRESOS)', class: 'fw-bold text-dark', rowClass: 'fw-bold table-light' }
+    ];
+
+    let bodyHTML = `<tbody>`;
+
+    categorias.forEach(cat => {
+        let totalAnualCat = 0;
+        bodyHTML += `<tr class="${cat.rowClass}">`;
+        bodyHTML += `<td class="fw-semibold sticky-col ${cat.class}">${cat.titulo}</td>`;
+
+        nombresMeses.forEach((_, mIdx) => {
+            const estaExpandido = mesesExpandidos[mIdx];
+            const diasEnMes = new Date(anio, mIdx + 1, 0).getDate();
+            const valorMes = matriz[mIdx][cat.id] || 0;
+            totalAnualCat += valorMes;
+
+            bodyHTML += `<td class="text-end ${valorMes > 0 ? 'fw-bold' : 'text-muted'}">$${valorMes.toLocaleString('es-CL')}</td>`;
+
+            if (estaExpandido) {
+                for (let d = 1; d <= diasEnMes; d++) {
+                    const valorDia = matriz[mIdx].dias[d] ? (matriz[mIdx].dias[d][cat.id] || 0) : 0;
+                    const fechaDia = `${anio}-${String(mIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    const tieneDetalle = valorDia > 0;
+                    bodyHTML += `<td class="text-end small bg-light ${tieneDetalle ? 'celda-resumen-clicable' : 'text-muted'}" ${tieneDetalle ? `role="button" tabindex="0" title="Ver detalle programado" onclick="abrirDetalleResumen('${cat.id}', '${fechaDia}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirDetalleResumen('${cat.id}', '${fechaDia}')}"` : ''}>${tieneDetalle ? '$' + valorDia.toLocaleString('es-CL') : '-'}</td>`;
+                }
+            }
+        });
+
+        bodyHTML += `<td class="text-end fw-bold fs-6">$${totalAnualCat.toLocaleString('es-CL')}</td>`;
+        bodyHTML += `</tr>`;
+    });
+
+    bodyHTML += `</tbody>`;
+    tabla.innerHTML = headerHTML + bodyHTML;
+}
+
+function toggleMes(mesIdx) {
+    mesesExpandidos[mesIdx] = !mesesExpandidos[mesIdx];
+    
+    if (window.datosMatrizGlobal) {
+        renderizarTablaResumen(window.datosMatrizGlobal, window.anioActualGlobal || new Date().getFullYear());
+    } else {
+        cargarResumenMensual();
+    }
+}
+
+function abrirDetalleResumen(categoria, fecha) {
+    const datos = window.detalleResumenGlobal || {};
+    const fechaDe = item => String(item.fecha || item.fecha_pago_programada || item.vencimiento || item.vencimiento_date || '').split('T')[0].split(' ')[0];
+    const categorias = categoria === 'total' ? ['cheques', 'proveedores', 'gastos_fijos'] : [categoria];
+    const especificacion = {
+        cheques: { lista: datos.cheques || [], monto: item => item.monto, concepto: item => item.numero_cheque ? `Cheque N° ${item.numero_cheque}` : (item.concepto || item.numero_doc || 'Cheque'), detalle: item => item.beneficiario || item.proveedor || item.detalle || '' },
+        proveedores: { lista: datos.proveedores || [], monto: item => item.monto_pago ?? item.monto_pendiente ?? item.monto, concepto: item => item.numero_doc ? `Factura N° ${item.numero_doc}` : (item.concepto || 'Factura programada'), detalle: item => item.proveedor_nombre || item.proveedor || item.razon_social || '' },
+        gastos_fijos: { lista: datos.gastos_fijos || [], monto: item => item.monto, concepto: item => item.concepto || item.nombre || 'Gasto fijo', detalle: item => item.detalle || item.descripcion || '' },
+        ventas: { lista: datos.ventas || [], monto: item => item.monto, concepto: item => item.numero_doc ? `Documento N° ${item.numero_doc}` : (item.documento || 'Venta'), detalle: item => item.cliente_nombre || item.cliente || item.nombre || '' },
+        cobranza: { lista: datos.cobranza || [], monto: item => item.saldo, concepto: item => item.numero_doc ? `Documento N° ${item.numero_doc}` : (item.documento || 'Cobranza'), detalle: item => item.cliente_nombre || item.cliente || item.nombre || '' }
+    };
+    const titulos = { cheques: 'Cheques a pagar', proveedores: 'Proveedores', gastos_fijos: 'Gastos fijos', total: 'Egresos programados', ventas: 'Ventas por vencimiento', cobranza: 'Cobranza por vencimiento' };
+    const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[caracter]));
+    const filas = categorias.flatMap(cat => {
+        const spec = especificacion[cat];
+        return (spec?.lista || []).filter(item => fechaDe(item) === fecha).map(item => ({
+            concepto: spec.concepto(item), detalle: spec.detalle(item), monto: Number(spec.monto(item)) || 0, estado: item.estado || 'Programado'
+        }));
+    });
+    const formatoMonto = monto => '$' + monto.toLocaleString('es-CL');
+    document.getElementById('tituloDetalleResumen').textContent = `${titulos[categoria] || 'Detalle'} · ${formatearFecha(fecha)}`;
+    document.getElementById('cuerpoDetalleResumen').innerHTML = filas.length
+        ? filas.map(fila => `<tr><td>${escapar(fila.concepto)}</td><td>${escapar(fila.detalle || '—')}</td><td class="text-end fw-semibold">${formatoMonto(fila.monto)}</td><td>${escapar(fila.estado)}</td></tr>`).join('')
+        : '<tr><td colspan="4" class="text-center text-muted py-4">No hay registros para este día.</td></tr>';
+    document.getElementById('totalDetalleResumen').textContent = formatoMonto(filas.reduce((suma, fila) => suma + fila.monto, 0));
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetalleResumen')).show();
+}
+
+
+function mostrarResultado(mensaje, tipo) {
+            const msgContainer = document.getElementById('msgCargaResultado');
+            msgContainer.className = `alert alert-${tipo} p-2 small mb-0`;
+            msgContainer.textContent = mensaje;
+            msgContainer.style.display = 'block';
+        }
+
+async function procesarExcelTransitorias() {
+    const input = document.getElementById('inputExcelTransitorias');
+    const msgDiv = document.getElementById('msgCargaResultado');
+    
+    if (!input.files || input.files.length === 0) {
+        msgDiv.style.display = 'block';
+        msgDiv.className = 'alert alert-warning mt-3';
+        msgDiv.innerText = 'Por favor selecciona un archivo Excel de Facturas Transitorias.';
+        return;
+    }
+
+    const file = input.files[0];
+    const reader = new FileReader();
+
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+            if (jsonData.length === 0) {
+                throw new Error('El archivo Excel está vacío o no se pudo leer.');
+            }
+
+            // Convertidor de formato fecha DD-MM-YYYY a YYYY-MM-DD
+            const formatearFecha = (val) => {
+                if (!val) return null;
+                if (val instanceof Date) return val.toISOString().split('T')[0];
+                if (typeof val === 'string' && val.includes('-')) {
+                    const partes = val.split('-');
+                    if (partes[0].length === 2) { // DD-MM-YYYY
+                        return `${partes[2]}-${partes[1]}-${partes[0]}`;
+                    }
+                }
+                return val;
+            };
+
+            // 1. Mapeo exacto de las columnas del Excel a la tabla de Supabase
+            const filasAInsertar = jsonData.map(row => ({
+                concepto: String(row['Concepto'] || ''),
+                proveedor_rut: String(row['Proveedor'] || ''),
+                proveedor_nombre: String(row['Nombre'] || ''),
+                tipo_comp: String(row['T. Comp.'] || ''),
+                tipo_doc: String(row['Tipo Doc.'] || ''),
+                numero_doc: String(row['Numero'] || ''),
+                fecha_emision: formatearFecha(row['Fecha']),
+                fecha_vencimiento: formatearFecha(row['Vencimiento']),
+                voucher: String(row['Voucher'] || ''),
+                referencia: String(row['Referencia'] || ''),
+                dias: Number(row['Dias'] || 0),
+                debe: Number(row['Debe'] || 0),
+                haber: Number(row['Haber'] || 0),
+                saldo: Number(row['Saldo'] || 0)
+            }));
+
+            // 2. BORRAR TODO LO EXISTENTE EN LA TABLA TRANSITORIA
+            const { error: deleteError } = await supabaseClient
+                .from('fc_facturas_transitorias')
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000'); // Elimina todas las filas
+
+            if (deleteError) {
+                console.error('Error al limpiar la tabla:', deleteError);
+                throw new Error('Error al limpiar registros anteriores: ' + deleteError.message);
+            }
+
+            // 3. INSERTAR LOS NUEVOS DATOS REEMPLAZADOS
+            const { error: insertError } = await supabaseClient
+                .from('fc_facturas_transitorias')
+                .insert(filasAInsertar);
+
+            if (insertError) {
+                console.error('Error al insertar:', insertError);
+                throw new Error('Error al guardar nuevos registros: ' + insertError.message);
+            }
+
+            // Notificación de éxito
+            msgDiv.style.display = 'block';
+            msgDiv.className = 'alert alert-success mt-3';
+            msgDiv.innerText = `¡Éxito! Se limpió la tabla y se cargaron ${filasAInsertar.length} registros actualizados.`;
+
+        } catch (err) {
+            console.error(err);
+            msgDiv.style.display = 'block';
+            msgDiv.className = 'alert alert-danger mt-3';
+            msgDiv.innerText = 'Error al procesar: ' + err.message;
+        }
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+
+// Función auxiliar para convertir las fechas de Excel (DD-MM-YYYY) a ISO (YYYY-MM-DD)
+function normalizarFechaExcel(val) {
+    if (typeof val === 'string' && val.includes('-')) {
+        const partes = val.split('-');
+        if (partes[0].length === 2) return `${partes[2]}-${partes[1]}-${partes[0]}`; // DD-MM-YYYY a YYYY-MM-DD
+    }
+    return val;
+}
+
+async function procesarExcelVentas() {
+    const input = document.getElementById('inputExcelVentas');
+    const msgDiv = document.getElementById('msgCargaResultado');
+    
+    if (!input.files || input.files.length === 0) {
+        msgDiv.style.display = 'block';
+        msgDiv.className = 'alert alert-warning mt-3';
+        msgDiv.innerText = 'Por favor selecciona un archivo Excel.';
+        return;
+    }
+
+    const file = input.files[0];
+    const reader = new FileReader();
+
+    reader.onload = async function(e) {
+        try {
+            const contenidoTexto = e.target.result;
+            let filasRaw = [];
+
+            // Parsear el HTML exportado por el ERP
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(contenidoTexto, 'text/html');
+            const tablaHTML = doc.querySelector('table');
+
+            if (tablaHTML) {
+                const filasTR = Array.from(tablaHTML.querySelectorAll('tr'));
+                const encabezados = Array.from(filasTR[0].querySelectorAll('th, td')).map(th => th.textContent.trim().toLowerCase());
+
+                for (let i = 1; i < filasTR.length; i++) {
+                    const celdas = Array.from(filasTR[i].querySelectorAll('td')).map(td => td.textContent.trim());
+                    if (celdas.length > 0) {
+                        let objetoFila = {};
+                        encabezados.forEach((enc, index) => {
+                            objetoFila[enc] = celdas[index] || '';
+                        });
+                        filasRaw.push(objetoFila);
+                    }
+                }
+            } else {
+                throw new Error("No se encontró la estructura de tabla en el archivo.");
+            }
+
+            // Corrección de Fecha Chilena DD/MM/YYYY -> YYYY-MM-DD
+            const formatearFechaCL = (val) => {
+                if (!val) return null;
+                const limpia = String(val).trim();
+                const partes = limpia.includes('/') ? limpia.split('/') : (limpia.includes('-') ? limpia.split('-') : []);
+                
+                if (partes.length === 3) {
+                    let [dia, mes, anio] = partes;
+                    if (dia.length === 1) dia = '0' + dia;
+                    if (mes.length === 1) mes = '0' + mes;
+                    if (anio.length === 2) anio = '20' + anio;
+                    
+                    // Asegurar formato YYYY-MM-DD
+                    if (partes[0].length === 2) { 
+                        return `${anio}-${mes}-${dia}`;
+                    }
+                }
+                return limpia;
+            };
+
+            // Limpieza exacta de números (quitar puntos de miles)
+            const parsearMonto = (val) => {
+                if (!val) return 0;
+                let numStr = String(val).trim();
+                // Elimina todos los puntos que actúan como separador de miles
+                numStr = numStr.replace(/\./g, '').replace(',', '.');
+                return Number(numStr) || 0;
+            };
+
+            const filasAInsertar = filasRaw.map(row => {
+                const doc = String(row['documento'] || row['nro factura'] || '').trim();
+
+                return {
+                    documento: doc,
+                    cliente_rut: String(row['cliente'] || row['rut'] || '').trim(),
+                    cliente_nombre: String(row['nombre'] || '').trim(),
+                    vendedor: String(row['vendedor'] || '').trim(),
+                    fecha: formatearFechaCL(row['fecha']),
+                    vencimiento: formatearFechaCL(row['vencimiento']),
+                    neto: parsearMonto(row['neto']),
+                    monto: parsearMonto(row['monto'])
+                };
+            }).filter(r => r.documento !== '');
+
+            if (filasAInsertar.length === 0) {
+                throw new Error("No se extrajeron filas válidas.");
+            }
+
+            // Insertar usando upsert para actualizar registros en vez de duplicar
+            const { data: res, error } = await supabaseClient
+                .from('fc_ventas')
+                .upsert(filasAInsertar, { onConflict: 'documento' });
+
+            if (error) throw error;
+
+            msgDiv.style.display = 'block';
+            msgDiv.className = 'alert alert-success mt-3';
+            msgDiv.innerText = `¡Éxito! Se cargaron ${filasAInsertar.length} ventas correctamente.`;
+
+            if (typeof cargarResumenMensual === 'function') {
+                cargarResumenMensual();
+            }
+
+        } catch (err) {
+            console.error('Error al procesar ventas:', err);
+            msgDiv.style.display = 'block';
+            msgDiv.className = 'alert alert-danger mt-3';
+            msgDiv.innerText = 'Error al procesar: ' + err.message;
+        }
+    };
+
+    reader.readAsText(file, 'utf-8');
+}
+
+let facturasDisponiblesPDF = [];
+
+function abrirModalPDF() {
+    // Nombre del proveedor seleccionado
+    const proveedorInput = document.getElementById('selectProveedor') || document.getElementById('inputProveedor');
+    const proveedorNombre = proveedorInput ? proveedorInput.value : 'Nipro Medical Corporation';
+
+    facturasDisponiblesPDF = []; 
+
+    // Capturar facturas visibles en las tablas
+    document.querySelectorAll('table tbody tr').forEach((tr, index) => {
+        const cols = tr.querySelectorAll('td');
+        // Verificamos que sea una fila con datos de factura
+        if (cols.length >= 4 && tr.innerText.includes('N°')) {
+            const numFac = cols[1]?.innerText.replace('N°', '').trim() || cols[0]?.innerText.trim();
+            const fecha = cols[0]?.innerText.trim();
+            const montoTexto = cols[4]?.innerText.trim() || cols[3]?.innerText.trim() || '$0';
+            const montoNumero = parseFloat(montoTexto.replace(/[^0-9.-]+/g, "")) || 0;
+
+            facturasDisponiblesPDF.push({
+                id: index,
+                numFactura: numFac,
+                fechaPago: fecha.includes('/') || fecha.includes('-') ? fecha : 'POR PROGRAMAR',
+                montoStr: montoTexto,
+                montoNum: montoNumero,
+                proveedor: proveedorNombre
+            });
+        }
+    });
+
+    const tbody = document.getElementById('bodyCheckboxesPDF');
+    if (facturasDisponiblesPDF.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No se encontraron facturas para este proveedor.</td></tr>`;
+    } else {
+        tbody.innerHTML = facturasDisponiblesPDF.map((item, idx) => `
+            <tr>
+                <td><input type="checkbox" class="pdf-item-check" data-idx="${idx}" checked></td>
+                <td class="fw-bold">${item.numFactura}</td>
+                <td><span class="badge ${item.fechaPago === 'POR PROGRAMAR' ? 'bg-warning text-dark' : 'bg-info text-dark'}">${item.fechaPago}</span></td>
+                <td class="text-end fw-bold text-success">${item.montoStr}</td>
+            </tr>
+        `).join('');
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('modalPDFSelection'));
+    modal.show();
+}
+
+function toggleSelectAllPDFCheck(mainCheck) {
+    document.querySelectorAll('.pdf-item-check').forEach(chk => chk.checked = mainCheck.checked);
+}
+
+// 1. Función para convertir el texto formateado (ej: "$7.275.541") a número entero puro (7275541)
+function parsearMontoCLP(montoTexto) {
+    if (!montoTexto) return 0;
+    const soloNumeros = montoTexto.toString().replace(/[^0-9-]/g, '');
+    return parseInt(soloNumeros, 10) || 0;
+}
+
+// 2. Función para formatear un número entero a formato de moneda chilena ($X.XXX.XXX)
+function formatearCLP(numero) {
+    return '$' + Math.round(numero).toLocaleString('es-CL');
+}
+
+// 3. Función principal para generar y descargar el PDF elegante
+function generarPDFSeleccionadas() {
+    const seleccionados = [];
+    document.querySelectorAll('.pdf-item-check:checked').forEach(chk => {
+        const idx = chk.getAttribute('data-idx');
+        seleccionados.push(facturasDisponiblesPDF[idx]);
+    });
+
+    if (seleccionados.length === 0) {
+        alert('Debes seleccionar al menos una factura.');
+        return;
+    }
+
+    // Calcular el total de forma precisa
+    const totalMonto = seleccionados.reduce((acc, item) => acc + parsearMontoCLP(item.montoStr), 0);
+    const totalFormateado = formatearCLP(totalMonto);
+    
+    const proveedorNombre = seleccionados[0]?.proveedor || 'Nipro Medical Corporation';
+    const hoy = new Date().toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // Ocultar Modal
+    const modalEl = document.getElementById('modalPDFSelection');
+    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+    if (modalInstance) modalInstance.hide();
+
+    // Crear plantilla HTML para el PDF
+    const container = document.createElement('div');
+    container.style.padding = '40px';
+    container.style.fontFamily = "'Plus Jakarta Sans', Arial, sans-serif";
+    container.style.color = '#2c3e50';
+    container.style.backgroundColor = '#ffffff';
+
+    container.innerHTML = `
+        <!-- ENCABEZADO -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #10b981; padding-bottom: 20px; margin-bottom: 25px;">
+            <div>
+                <h1 style="color: #059669; font-weight: 800; margin: 0; font-size: 32px; letter-spacing: -0.5px;">Novovet</h1>
+                <p style="margin: 4px 0 0 0; font-size: 12px; font-weight: 700; color: #4b5563;">RUT: 76.186.785-7</p>
+                <p style="margin: 2px 0 0 0; font-size: 12px; color: #6b7280;">Manuel Rodriguez 9987, La Florida</p>
+            </div>
+            <div style="text-align: right;">
+                <h2 style="font-size: 22px; font-weight: 800; color: #111827; margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">PLAN DE PAGO PROVEEDOR</h2>
+                <div style="margin-top: 6px; display: inline-block; background-color: #f3f4f6; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; color: #374151;">
+                    Fecha de Emisión: <span style="color: #059669;">${hoy}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TARJETA PROVEEDOR -->
+        <div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); border-left: 5px solid #059669; padding: 18px 20px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <small style="text-transform: uppercase; color: #6b7280; font-weight: 800; font-size: 10px; letter-spacing: 1px; display: block; margin-bottom: 4px;">PROVEEDOR / LABORATORIO</small>
+            <h3 style="margin: 0; font-size: 22px; font-weight: 800; color: #111827;">${proveedorNombre}</h3>
+        </div>
+
+        <!-- TABLA DE DETALLE DE FACTURAS -->
+        <table style="width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 30px; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb;">
+            <thead>
+                <tr style="background-color: #1f2937; color: #ffffff; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;">
+                    <th style="padding: 14px 18px; font-weight: 700;">FECHA PAGO</th>
+                    <th style="padding: 14px 18px; font-weight: 700;">FACTURAS / DETALLE</th>
+                    <th style="padding: 14px 18px; text-align: right; font-weight: 700;">MONTO</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${seleccionados.map((item, idx) => {
+                    const montoNumerico = parsearMontoCLP(item.montoStr);
+                    const bgRow = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
+                    return `
+                        <tr style="background-color: ${bgRow}; font-size: 13px;">
+                            <td style="padding: 14px 18px; font-weight: 600; color: #374151; border-bottom: 1px solid #f3f4f6;">${item.fechaPago}</td>
+                            <td style="padding: 14px 18px; color: #4b5563; font-weight: 500; border-bottom: 1px solid #f3f4f6;">Factura N° ${item.numFactura}</td>
+                            <td style="padding: 14px 18px; text-align: right; font-weight: 700; color: #059669; border-bottom: 1px solid #f3f4f6;">${formatearCLP(montoNumerico)}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+
+        <!-- BANNER TOTAL COMPROMISO -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 40px;">
+            <div style="background-color: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 20px 30px; text-align: right; min-width: 320px;">
+                <small style="color: #047857; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 0.8px; display: block; margin-bottom: 4px;">TOTAL COMPROMISO PENDIENTE</small>
+                <div style="font-size: 30px; font-weight: 800; color: #065f46; letter-spacing: -0.5px;">${totalFormateado}</div>
+            </div>
+        </div>
+
+        <!-- PIE DE PÁGINA -->
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 15px; text-align: center; color: #9ca3af; font-size: 11px;">
+            Documento generado automáticamente por Novovet Cash Flow System.
+        </div>
+    `;
+
+    // Opciones de descarga en PDF
+    const opt = {
+        margin:       12,
+        filename:     `Plan_de_Pago_${proveedorNombre.replace(/\s+/g, '_')}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 3, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(container).save();
+}
+
+
+    </script>
+</body>
+</html>

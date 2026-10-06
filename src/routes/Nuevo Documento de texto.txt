@@ -1,0 +1,111 @@
+import { Router } from 'express';
+import { supabase } from '../config/supabase.js';
+
+const router = Router();
+
+// 1. Obtener la plantilla de Gastos Fijos Base
+router.get('/catalogo', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('fc_gastos_fijos_catalogo')
+            .select('*')
+            .order('concepto', { ascending: true });
+
+        if (error) throw error;
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Agregar un nuevo Gasto Fijo al catálogo base
+router.post('/catalogo', async (req, res) => {
+    try {
+        const { concepto, monto_promedio } = req.body;
+        if (!concepto) return res.status(400).json({ error: 'El concepto es requerido' });
+
+        const { data, error } = await supabase
+            .from('fc_gastos_fijos_catalogo')
+            .insert([{ concepto, monto_promedio: Number(monto_promedio) || 0 }])
+            .select();
+
+        if (error) throw error;
+        res.json({ exito: true, data: data[0] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. Programar Gastos Fijos para el Flujo de Caja (Validando duplicados)
+router.post('/programar', async (req, res) => {
+    try {
+        const { gastos } = req.body; // Array: [{ concepto, monto, fecha_pago_programada }]
+
+        if (!gastos || !gastos.length) {
+            return res.status(400).json({ error: 'No se enviaron gastos para programar.' });
+        }
+
+        // Filtrar solo los que tengan fecha asignada y monto > 0
+        const aProgramar = gastos.filter(g => g.fecha_pago_programada && Number(g.monto) > 0);
+
+        if (!aProgramar.length) {
+            return res.status(400).json({ error: 'Debe ingresar una fecha y monto válido para al menos un gasto.' });
+        }
+
+        const insertados = [];
+        const omitidos = [];
+
+        for (const item of aProgramar) {
+            // Verificar si ya fue programado ese concepto en esa misma fecha
+            const { data: existente } = await supabase
+                .from('fc_gastos_fijos_programados')
+                .select('id')
+                .eq('concepto', item.concepto)
+                .eq('fecha_pago_programada', item.fecha_pago_programada)
+                .maybeSingle();
+
+            if (existente) {
+                omitidos.push(`${item.concepto} (${item.fecha_pago_programada})`);
+            } else {
+                const { error: errInsert } = await supabase
+                    .from('fc_gastos_fijos_programados')
+                    .insert([{
+                        concepto: item.concepto,
+                        monto: Number(item.monto),
+                        fecha_pago_programada: item.fecha_pago_programada,
+                        estado: 'pendiente'
+                    }]);
+
+                if (errInsert) throw errInsert;
+                insertados.push(item.concepto);
+            }
+        }
+
+        let mensaje = `Se programaron ${insertados.length} gasto(s) fijo(s) correctamente.`;
+        if (omitidos.length > 0) {
+            mensaje += ` Los siguientes ya estaban ingresados para esa fecha: ${omitidos.join(', ')}.`;
+        }
+
+        res.json({ exito: true, mensaje, insertados, omitidos });
+    } catch (err) {
+        console.error('Error al programar gastos fijos:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 4. Obtener Gastos Fijos Programados para la Matriz / Flujo de Caja
+router.get('/programados', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('fc_gastos_fijos_programados')
+            .select('*')
+            .neq('estado', 'pagado');
+
+        if (error) throw error;
+        res.json(data || []);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+export default router;
