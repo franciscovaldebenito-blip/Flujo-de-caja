@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { google } from 'googleapis';
-import { supabase } from './src/config/supabase.js';
+import { supabase, createUserScopedClient } from './src/config/supabase.js';
 
 // Importación de rutas modulares
 import rutasFacturas from './src/routes/facturas.js';
@@ -16,6 +16,59 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
+
+async function autenticarUsuarioActivo(req, res, next) {
+    const coincidencia = req.get('authorization')?.match(/^Bearer\s+(.+)$/i);
+    if (!coincidencia) {
+        return res.status(401).json({ error: 'Debes iniciar sesión para continuar.' });
+    }
+
+    try {
+        const token = coincidencia[1];
+        const { data: resultadoAuth, error: errorAuth } = await supabase.auth.getUser(token);
+        if (errorAuth || !resultadoAuth?.user) {
+            return res.status(401).json({ error: 'La sesión no es válida. Inicia sesión nuevamente.' });
+        }
+
+        const clienteUsuario = createUserScopedClient(token);
+        const { data: perfil, error: errorPerfil } = await clienteUsuario
+            .from('fc_usuarios')
+            .select('id, email, is_active')
+            .eq('id', resultadoAuth.user.id)
+            .maybeSingle();
+
+        if (errorPerfil) {
+            console.error('No se pudo validar el perfil de acceso:', errorPerfil.message);
+            return res.status(503).json({ error: 'No se pudo verificar tu acceso. Intenta nuevamente.' });
+        }
+        if (!perfil?.is_active) {
+            return res.status(403).json({ error: 'Tu cuenta no está habilitada para usar esta aplicación.' });
+        }
+
+        req.supabase = clienteUsuario;
+        req.authUser = resultadoAuth.user;
+        req.appUser = perfil;
+        next();
+    } catch (error) {
+        console.error('Error al validar la sesión:', error.message);
+        res.status(500).json({ error: 'No se pudo validar la sesión.' });
+    }
+}
+
+app.use('/api', (req, res, next) => {
+    if (req.path === '/health') return next();
+    return autenticarUsuarioActivo(req, res, next);
+});
+
+app.get('/app-config.js', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.type('application/javascript').send(
+        `window.CASHFLOW_CONFIG = ${JSON.stringify({
+            supabaseUrl: process.env.SUPABASE_URL,
+            supabasePublishableKey: process.env.SUPABASE_ANON_KEY
+        })};`
+    );
+});
 
 // Vinculación de routers principales
 app.use('/api/facturas', rutasFacturas);
@@ -97,7 +150,7 @@ app.post('/api/cheques/sincronizar', async (req, res) => {
         let hayMas = true;
 
         while (hayMas) {
-            const { data, error } = await supabase
+            const { data, error } = await req.supabase
                 .from('fc_cheques')
                 .select('proveedor, numero_cheque, estado')
                 .order('proveedor', { ascending: true })
@@ -119,7 +172,7 @@ app.post('/api/cheques/sincronizar', async (req, res) => {
             return { ...cheque, estado: estadosExistentes.has(clave) ? estadosExistentes.get(clave) : 'pendiente' };
         });
 
-        const { error: errorUpsert } = await supabase
+        const { error: errorUpsert } = await req.supabase
             .from('fc_cheques')
             .upsert(chequesProcesados, { onConflict: 'proveedor,numero_cheque' });
 
@@ -142,7 +195,7 @@ app.post('/api/cheques/sincronizar', async (req, res) => {
 app.get('/api/cheques/resumen-hoy', async (req, res) => {
     try {
         const hoy = new Date().toISOString().split('T')[0];
-        const { data, error } = await supabase
+        const { data, error } = await req.supabase
             .from('fc_cheques')
             .select('monto')
             .eq('fecha', hoy)
@@ -170,7 +223,7 @@ app.get('/api/cheques/resumen-hoy', async (req, res) => {
 app.post('/api/cheques/reagendar', async (req, res) => {
     try {
         const { id, fecha } = req.body;
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_cheques')
             .update({ fecha: fecha })
             .eq('id', id);
@@ -186,7 +239,7 @@ app.post('/api/cheques/reagendar', async (req, res) => {
 app.post('/api/cheques/pagar/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_cheques')
             .update({ estado: 'pagado' })
             .eq('id', id);
@@ -202,7 +255,7 @@ app.post('/api/cheques/pagar/:id', async (req, res) => {
 app.delete('/api/cheques/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_cheques')
             .delete()
             .eq('id', id);
@@ -221,7 +274,7 @@ app.get('/api/ventas/resumen-mensual/:anio', async (req, res) => {
     try {
         const { anio } = req.params;
 
-        const { data, error } = await supabase
+        const { data, error } = await req.supabase
             .from('fc_ventas')
             .select('vencimiento_date, monto_total')
             .gte('vencimiento_date', `${anio}-01-01`)
@@ -260,7 +313,7 @@ app.post('/api/ventas/cargar-excel', async (req, res) => {
             return res.status(400).json({ exito: false, error: 'No hay datos de ventas para cargar.' });
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await req.supabase
             .from('fc_ventas')
             .insert(ventas);
 
@@ -290,7 +343,7 @@ app.get('/api/resumen-mensual', async (req, res) => {
         let masVentas = true;
 
         while (masVentas) {
-            const { data: loteVentas, error: errVentas } = await supabase
+            const { data: loteVentas, error: errVentas } = await req.supabase
                 .from('fc_ventas')
                 .select('*')
                 .gte('vencimiento', `${anioConsulta}-01-01`)
@@ -314,7 +367,7 @@ app.get('/api/resumen-mensual', async (req, res) => {
         let masCobranza = true;
 
         while (masCobranza) {
-            const { data: loteCobranza, error: errCobranza } = await supabase
+            const { data: loteCobranza, error: errCobranza } = await req.supabase
                 .from('fc_cobranza')
                 .select('*')
                 .gte('vencimiento', `${anioConsulta}-01-01`)
@@ -334,17 +387,17 @@ app.get('/api/resumen-mensual', async (req, res) => {
 
         // 3. Consultar egresos en paralelo
         const [resCheques, resProveedores, resGastos] = await Promise.all([
-            supabase.from('fc_cheques')
+            req.supabase.from('fc_cheques')
                 .select('*')
                 .gte('fecha', `${anioConsulta}-01-01`)
                 .lte('fecha', `${anioConsulta}-12-31`),
             
-            supabase.from('fc_facturas_programadas')
+            req.supabase.from('fc_facturas_programadas')
                 .select('*')
                 .gte('fecha_pago_programada', `${anioConsulta}-01-01`)
                 .lte('fecha_pago_programada', `${anioConsulta}-12-31`),
             
-            supabase.from('fc_gastos_fijos_programados')
+            req.supabase.from('fc_gastos_fijos_programados')
                 .select('*')
                 .gte('fecha_pago_programada', `${anioConsulta}-01-01`)
                 .lte('fecha_pago_programada', `${anioConsulta}-12-31`)
@@ -379,7 +432,7 @@ app.get('/api/resumen-mensual', async (req, res) => {
 app.post('/api/facturas/revertir-pago/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_facturas_programadas')
             .update({ estado: 'pendiente' })
             .eq('id', id);
@@ -395,7 +448,7 @@ app.post('/api/facturas/revertir-pago/:id', async (req, res) => {
 app.post('/api/cheques/revertir-pago/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_cheques')
             .update({ estado: 'pendiente' })
             .eq('id', id);
@@ -411,8 +464,8 @@ app.post('/api/cheques/revertir-pago/:id', async (req, res) => {
 app.post('/api/gastos-fijos/revertir-pago/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase
-            .from('fc_gastos_fijos')
+        const { error } = await req.supabase
+            .from('fc_gastos_fijos_programados')
             .update({ estado: 'pendiente' })
             .eq('id', id);
 
@@ -427,7 +480,7 @@ app.post('/api/gastos-fijos/revertir-pago/:id', async (req, res) => {
 app.post('/api/cheques/pagar-todo', async (req, res) => {
     try {
         const { fecha } = req.body;
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_cheques')
             .update({ estado: 'pagado' })
             .eq('fecha', fecha)
@@ -444,7 +497,7 @@ app.post('/api/cheques/pagar-todo', async (req, res) => {
 app.post('/api/facturas/pagar-todo', async (req, res) => {
     try {
         const { fecha, proveedor } = req.body;
-        let query = supabase
+        let query = req.supabase
             .from('fc_facturas_programadas')
             .update({ estado: 'pagado' })
             .eq('fecha_pago_programada', fecha)
@@ -466,7 +519,7 @@ app.post('/api/facturas/pagar/:id', async (req, res) => {
         const { id } = req.params;
 
         // ACTUALIZA la fila existente mediante su ID único
-        const { data, error } = await supabase
+        const { data, error } = await req.supabase
             .from('fc_facturas_programadas')
             .update({ estado: 'pagado' })
             .eq('id', id)
@@ -513,7 +566,7 @@ app.get('/api/facturas/consulta-laboratorio', async (req, res) => {
 
 
 
-        let queryAgendadas = supabase.from('fc_facturas_programadas').select('*');
+        let queryAgendadas = req.supabase.from('fc_facturas_programadas').select('*');
 
 
 
@@ -537,7 +590,7 @@ app.get('/api/facturas/consulta-laboratorio', async (req, res) => {
 
 
 
-        let queryPendientes = supabase.from('fc_facturas_transitorias').select('*');
+        let queryPendientes = req.supabase.from('fc_facturas_transitorias').select('*');
 
 
 
@@ -615,8 +668,8 @@ app.get('/api/facturas/consulta-laboratorio', async (req, res) => {
 app.post('/api/gastos-fijos/pagar-todo', async (req, res) => {
     try {
         const { fecha, proveedor: concepto } = req.body;
-        let query = supabase
-            .from('fc_gastos_fijos')
+        let query = req.supabase
+            .from('fc_gastos_fijos_programados')
             .update({ estado: 'pagado' })
             .eq('fecha_pago_programada', fecha)
             .eq('estado', 'pendiente');
@@ -632,15 +685,7 @@ app.post('/api/gastos-fijos/pagar-todo', async (req, res) => {
 });
 
 
-app.get('/api/health', async (req, res) => {
-    try {
-        const { data, error } = await supabase.from('fc_facturas_transitorias').select('count', { count: 'exact' });
-        if (error) throw error;
-        res.json({ status: 'OK', mensaje: 'Conexión a Supabase exitosa', data });
-    } catch (err) {
-        res.status(500).json({ status: 'Error', mensaje: err.message });
-    }
-});
+app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
 
 // Inicialización del servidor
 app.listen(PORT, '0.0.0.0', () => {

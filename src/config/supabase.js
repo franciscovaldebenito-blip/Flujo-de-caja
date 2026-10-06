@@ -7,8 +7,20 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('⚠️ Faltan las variables SUPABASE_URL o SUPABASE_ANON_KEY en el archivo .env');
+  throw new Error('Faltan las variables SUPABASE_URL o SUPABASE_ANON_KEY. Configúralas en el entorno del servidor.');
 }
 
-// Asegúrate de que lleve la palabra 'export' al inicio:
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+export function createUserScopedClient(accessToken) {
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false
+    },
+    global: {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    }
+  });
+}

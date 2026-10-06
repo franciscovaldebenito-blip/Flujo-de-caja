@@ -15,6 +15,7 @@
     
     <!-- LIBRERÍA SHEETJS (XLSX) REQUERIDA PARA PROCESAR EXCEL -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="/app-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -86,9 +87,38 @@
         .monto-badge-gasto:hover { background-color: #fee2e2; transform: scale(1.04); }
         .celda-resumen-clicable { cursor: pointer; color: #1d4ed8 !important; text-decoration: underline dotted; text-underline-offset: 2px; }
         .celda-resumen-clicable:hover, .celda-resumen-clicable:focus { background-color: #dbeafe !important; outline: 2px solid #93c5fd; outline-offset: -2px; }
+        .auth-screen { position: fixed; inset: 0; z-index: 20000; display: grid; place-items: center; padding: 1rem; background: #f1f5f9; }
     </style>
 </head>
 <body>
+
+    <div id="pantallaLogin" class="auth-screen">
+        <div class="card border-0 shadow-lg" style="width: min(100%, 410px);">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <div class="bg-success text-white rounded-3 d-inline-flex align-items-center justify-content-center p-2 mb-2"><i class="bi bi-bar-chart-fill fs-4"></i></div>
+                    <h4 class="fw-bold mb-1">Novovet Cash Flow</h4>
+                    <div id="subtituloAcceso" class="text-muted">Inicia sesión para continuar</div>
+                </div>
+                <form id="formularioInicioSesion" autocomplete="on">
+                    <label for="correoInicioSesion" class="form-label small fw-semibold">Correo</label>
+                    <input id="correoInicioSesion" class="form-control mb-3" type="email" autocomplete="username" required>
+                    <label for="claveInicioSesion" class="form-label small fw-semibold">Contraseña</label>
+                    <input id="claveInicioSesion" class="form-control mb-3" type="password" autocomplete="current-password" required>
+                    <div id="mensajeInicioSesion" class="small text-danger mb-3" role="alert" aria-live="polite"></div>
+                    <button id="botonInicioSesion" class="btn btn-primary w-100 fw-bold" type="submit">Iniciar sesión</button>
+                </form>
+                <form id="formularioCrearClave" class="d-none" autocomplete="new-password">
+                    <label for="nuevaClave" class="form-label small fw-semibold">Nueva contraseña</label>
+                    <input id="nuevaClave" class="form-control mb-3" type="password" minlength="8" autocomplete="new-password" required>
+                    <label for="confirmarClave" class="form-label small fw-semibold">Confirma la contraseña</label>
+                    <input id="confirmarClave" class="form-control mb-3" type="password" minlength="8" autocomplete="new-password" required>
+                    <div id="mensajeCrearClave" class="small text-danger mb-3" role="alert" aria-live="polite"></div>
+                    <button id="botonCrearClave" class="btn btn-primary w-100 fw-bold" type="submit">Guardar contraseña</button>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- 1. HEADER PRINCIPAL (BARRA NAVEGACIÓN Y ACCIONES GLOBAL) -->
     <header class="bg-white border-bottom shadow-sm px-3 py-2 mb-2">
@@ -128,6 +158,8 @@
                 <button class="btn btn-sm btn-warning text-dark fw-bold rounded-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCargaDatos">
                     <i class="bi bi-file-earmark-arrow-up-fill me-1"></i> Cargar Datos
                 </button>
+                <span id="usuarioSesionLabel" class="small text-muted d-none"></span>
+                <button id="botonCerrarSesion" class="btn btn-sm btn-outline-secondary d-none" onclick="cerrarSesionAplicacion()">Salir</button>
             </div>
 
         </div>
@@ -562,10 +594,130 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
 // Inicialización del cliente Supabase
-const SUPABASE_URL = 'https://yfmxnbqglbslmfggizrg.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_3BZmnxkmUOBr-idsqHuNAA_p-i8WdAp'; // Reemplaza por tu anon key de Supabase
+const configuracionCashFlow = window.CASHFLOW_CONFIG;
+const supabaseClient = configuracionCashFlow?.supabaseUrl && configuracionCashFlow?.supabasePublishableKey
+    ? supabase.createClient(configuracionCashFlow.supabaseUrl, configuracionCashFlow.supabasePublishableKey)
+    : null;
+const parametrosHashAuth = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+let flujoCrearClave = ['invite', 'recovery'].includes(parametrosHashAuth.get('type'));
+const fetchNativo = window.fetch.bind(window);
+window.fetch = async (input, init = {}) => {
+    const urlSolicitada = new URL(input instanceof Request ? input.url : input, window.location.origin);
+    if (urlSolicitada.origin === window.location.origin && urlSolicitada.pathname.startsWith('/api/') && urlSolicitada.pathname !== '/api/health') {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const headers = new Headers(input instanceof Request ? input.headers : undefined);
+        new Headers(init.headers || {}).forEach((valor, llave) => headers.set(llave, valor));
+        if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`);
+        init = { ...init, headers };
+    }
+    return fetchNativo(input, init);
+};
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+async function validarSesionAplicacion(session, mensajeSiNoAutorizado = '') {
+    const pantalla = document.getElementById('pantallaLogin');
+    const mensaje = document.getElementById('mensajeInicioSesion');
+    if (!session?.access_token) {
+        pantalla.classList.remove('d-none');
+        if (mensajeSiNoAutorizado) mensaje.textContent = mensajeSiNoAutorizado;
+        return false;
+    }
+
+    const { data: perfil, error } = await supabaseClient
+        .from('fc_usuarios')
+        .select('email, is_active')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+    if (error || !perfil?.is_active) {
+        await supabaseClient.auth.signOut();
+        pantalla.classList.remove('d-none');
+        mensaje.textContent = error
+            ? 'No se pudo verificar el acceso. Contacta al administrador.'
+            : 'Tu cuenta aún no está habilitada. Contacta al administrador.';
+        return false;
+    }
+
+    mensaje.textContent = '';
+    pantalla.classList.add('d-none');
+    document.getElementById('usuarioSesionLabel').textContent = perfil.email || session.user.email || '';
+    document.getElementById('usuarioSesionLabel').classList.remove('d-none');
+    document.getElementById('botonCerrarSesion').classList.remove('d-none');
+    cargarMatriz();
+    cargarMontosMesesFuturos();
+    return true;
+}
+
+async function iniciarSesionAplicacion(event) {
+    event.preventDefault();
+    const boton = document.getElementById('botonInicioSesion');
+    const mensaje = document.getElementById('mensajeInicioSesion');
+    boton.disabled = true;
+    boton.textContent = 'Validando…';
+    mensaje.textContent = '';
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email: document.getElementById('correoInicioSesion').value.trim(),
+            password: document.getElementById('claveInicioSesion').value
+        });
+        if (error) throw error;
+        await validarSesionAplicacion(data.session, 'No se pudo iniciar sesión.');
+    } catch (error) {
+        mensaje.textContent = error.message || 'No se pudo iniciar sesión.';
+    } finally {
+        boton.disabled = false;
+        boton.textContent = 'Iniciar sesión';
+    }
+}
+
+function mostrarFormularioCrearClave(mensaje = '') {
+    flujoCrearClave = true;
+    document.getElementById('formularioInicioSesion').classList.add('d-none');
+    document.getElementById('formularioCrearClave').classList.remove('d-none');
+    document.getElementById('subtituloAcceso').textContent = 'Crea una contraseña para tu cuenta';
+    document.getElementById('mensajeCrearClave').textContent = mensaje;
+}
+
+async function guardarNuevaClave(event) {
+    event.preventDefault();
+    const nuevaClave = document.getElementById('nuevaClave').value;
+    const confirmarClave = document.getElementById('confirmarClave').value;
+    const mensaje = document.getElementById('mensajeCrearClave');
+    const boton = document.getElementById('botonCrearClave');
+    mensaje.textContent = '';
+    if (nuevaClave.length < 8) {
+        mensaje.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+        return;
+    }
+    if (nuevaClave !== confirmarClave) {
+        mensaje.textContent = 'Las contraseñas no coinciden.';
+        return;
+    }
+    boton.disabled = true;
+    boton.textContent = 'Guardando…';
+    try {
+        const { data, error } = await supabaseClient.auth.updateUser({ password: nuevaClave });
+        if (error) throw error;
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        document.getElementById('formularioCrearClave').classList.add('d-none');
+        document.getElementById('formularioInicioSesion').classList.remove('d-none');
+        document.getElementById('subtituloAcceso').textContent = 'Contraseña creada. Inicia sesión para continuar.';
+        document.getElementById('correoInicioSesion').value = data.user?.email || '';
+        document.getElementById('claveInicioSesion').value = '';
+        flujoCrearClave = false;
+        await supabaseClient.auth.signOut();
+    } catch (error) {
+        mensaje.textContent = error.message || 'No se pudo guardar la contraseña. Solicita una nueva invitación.';
+    } finally {
+        boton.disabled = false;
+        boton.textContent = 'Guardar contraseña';
+    }
+}
+
+async function cerrarSesionAplicacion() {
+    await supabaseClient.auth.signOut();
+    window.location.reload();
+}
+
         let timerBusqueda = null;
         let facturasObtenidas = [];
         let datosMatrizGlobal = { programadas: [], cheques: [], gastosFijos: [] };
@@ -574,11 +726,26 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         let labSeleccionadoActivo = { rut: '', nombre: '' };
         const nombresMeses = { 1:'Enero', 2:'Febrero', 3:'Marzo', 4:'Abril', 5:'Mayo', 6:'Junio', 7:'Julio', 8:'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre' };
 
-        document.addEventListener('DOMContentLoaded', () => { 
+        document.addEventListener('DOMContentLoaded', async () => { 
             modalDetalleInstance = new bootstrap.Modal(document.getElementById('modalDetalleDocumentos')); 
             generarColumnasDias(); 
-            cargarMatriz(); 
-            cargarMontosMesesFuturos(); 
+            if (!supabaseClient) {
+                document.getElementById('mensajeInicioSesion').textContent = 'Falta la configuración de Supabase en este servidor. Abre la URL publicada de la aplicación o inicia el servidor Node configurado.';
+                document.getElementById('botonInicioSesion').disabled = true;
+                return;
+            }
+            document.getElementById('formularioInicioSesion').addEventListener('submit', iniciarSesionAplicacion);
+            document.getElementById('formularioCrearClave').addEventListener('submit', guardarNuevaClave);
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
+            if (error) {
+                document.getElementById('mensajeInicioSesion').textContent = 'No se pudo recuperar la sesión. Inicia sesión nuevamente.';
+                return;
+            }
+            if (flujoCrearClave && session?.access_token) {
+                mostrarFormularioCrearClave();
+                return;
+            }
+            await validarSesionAplicacion(session);
         });
 
 function mostrarPestana(tipo) {

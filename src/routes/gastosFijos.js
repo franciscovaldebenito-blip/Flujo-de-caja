@@ -1,12 +1,11 @@
 import express from 'express';
-import { supabase } from '../config/supabase.js';
 
 const router = express.Router();
 
 // 1. Obtener lista base de Gastos Fijos (Catálogo)
 router.get('/catalogo', async (req, res) => {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await req.supabase
             .from('fc_gastos_fijos_catalogo')
             .select('*')
             .order('concepto', { ascending: true });
@@ -23,7 +22,7 @@ router.get('/catalogo', async (req, res) => {
 router.get('/programados', async (req, res) => {
     try {
         const { mes, anio } = req.query; // Puede recibir 'mes', 'anio' o formato 'YYYY-MM'
-        let query = supabase.from('fc_gastos_fijos_programados').select('*');
+        let query = req.supabase.from('fc_gastos_fijos_programados').select('*');
 
         if (mes) {
             let anioConsulta = anio ? parseInt(anio) : new Date().getFullYear();
@@ -63,7 +62,7 @@ router.get('/programados', async (req, res) => {
 router.post('/catalogo', async (req, res) => {
     try {
         const { concepto, monto_promedio } = req.body;
-        const { data, error } = await supabase
+        const { data, error } = await req.supabase
             .from('fc_gastos_fijos_catalogo')
             .insert([{ concepto, monto_promedio }]);
 
@@ -91,7 +90,7 @@ router.post('/programar', async (req, res) => {
             estado: 'pendiente'
         }));
 
-        const { data, error } = await supabase
+        const { data, error } = await req.supabase
             .from('fc_gastos_fijos_programados')
             .insert(registros);
 
@@ -111,7 +110,7 @@ router.post('/reagendar', async (req, res) => {
         if (fecha) updateData.fecha_pago_programada = fecha;
         if (monto !== undefined) updateData.monto = monto;
 
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_gastos_fijos_programados')
             .update(updateData)
             .eq('id', id);
@@ -128,7 +127,7 @@ router.post('/reagendar', async (req, res) => {
 router.post('/pagar/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_gastos_fijos_programados')
             .update({ estado: 'pagado' })
             .eq('id', id);
@@ -145,7 +144,7 @@ router.post('/pagar/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase
+        const { error } = await req.supabase
             .from('fc_gastos_fijos_programados')
             .delete()
             .eq('id', id);

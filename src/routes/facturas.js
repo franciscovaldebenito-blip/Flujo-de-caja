@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
 import exceljs from 'exceljs';
-import { supabase } from '../config/supabase.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -69,9 +68,9 @@ router.post('/upload-excel', upload.single('archivo'), async (req, res) => {
             }
         });
 
-        await supabase.from('fc_facturas_transitorias').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await req.supabase.from('fc_facturas_transitorias').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-        const { data, error } = await supabase.from('fc_facturas_transitorias').insert(filas);
+        const { data, error } = await req.supabase.from('fc_facturas_transitorias').insert(filas);
         if (error) throw error;
 
         res.json({ mensaje: 'Excel procesado e insertado correctamente', registros: filas.length });
@@ -85,14 +84,14 @@ router.get('/pendientes/:rut', async (req, res) => {
     try {
         const { rut } = req.params;
 
-        const { data: transitorias, error: errTrans } = await supabase
+        const { data: transitorias, error: errTrans } = await req.supabase
             .from('fc_facturas_transitorias')
             .select('*')
             .eq('proveedor_rut', rut);
 
         if (errTrans) throw errTrans;
 
-        const { data: saldos, error: errSaldos } = await supabase
+        const { data: saldos, error: errSaldos } = await req.supabase
             .from('fc_saldos_facturas')
             .select('*')
             .eq('proveedor_rut', rut);
@@ -141,7 +140,7 @@ router.post('/programar', async (req, res) => {
             const nuevoSaldo = saldoActual - montoCubierto;
 
             // Inserción limpia a fc_facturas_programadas
-            const { error: errInsert } = await supabase
+            const { error: errInsert } = await req.supabase
                 .from('fc_facturas_programadas')
                 .insert({
                     numero_doc: factura.numero_doc,
@@ -157,7 +156,7 @@ router.post('/programar', async (req, res) => {
             if (errInsert) throw errInsert;
 
             // Actualización de saldos
-            const { error: errSaldo } = await supabase
+            const { error: errSaldo } = await req.supabase
                 .from('fc_saldos_facturas')
                 .upsert({
                     numero_doc: String(factura.numero_doc),
@@ -189,7 +188,7 @@ router.get('/buscar-proveedor', async (req, res) => {
 
         const termino = q.trim();
 
-        const { data, error } = await supabase
+        const { data, error } = await req.supabase
             .from('fc_facturas_transitorias')
             .select('proveedor_rut, proveedor_nombre')
             .or(`proveedor_nombre.ilike.%${termino}%,proveedor_rut.ilike.%${termino}%`)
@@ -223,21 +222,21 @@ router.get('/buscar-proveedor', async (req, res) => {
 router.get('/matriz', async (req, res) => {
     try {
         // ✅ Traemos TODAS las facturas programadas (tanto pendientes como pagadas)
-        const { data: programadas, error } = await supabase
+        const { data: programadas, error } = await req.supabase
             .from('fc_facturas_programadas')
             .select('*');
 
         if (error) throw error;
 
         // ✅ Traemos TODOS los cheques (tanto pendientes como pagados)
-        const { data: cheques, error: errCheq } = await supabase
+        const { data: cheques, error: errCheq } = await req.supabase
             .from('fc_cheques')
             .select('*');
 
         if (errCheq) console.error('Error al cargar cheques:', errCheq);
 
         // ✅ Traemos TODOS los gastos fijos (tanto pendientes como pagados)
-        const { data: gastosFijos, error: errGF } = await supabase
+        const { data: gastosFijos, error: errGF } = await req.supabase
             .from('fc_gastos_fijos_programados')
             .select('*');
 
