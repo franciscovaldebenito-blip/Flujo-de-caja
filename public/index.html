@@ -65,6 +65,8 @@
         /* TABLA Y COLUMNA CONGELADA */
         .table-cashflow { font-size: 0.75rem; white-space: nowrap; border-collapse: separate; border-spacing: 0; }
         .table-cashflow th { background-color: #0f172a; color: #f8fafc; text-align: center; font-weight: 600; padding: 6px; }
+        #tabFlujoCaja .table-cashflow thead th { position: sticky; top: 0; z-index: 20; }
+        #tabFlujoCaja .table-cashflow thead th.sticky-col { z-index: 30; }
         .sticky-col { position: sticky; left: 0; background-color: #ffffff !important; z-index: 10; border-right: 2px solid var(--border-color) !important; }
         th.sticky-col { background-color: #0f172a !important; z-index: 11; }
         
