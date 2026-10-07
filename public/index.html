@@ -413,6 +413,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- PESTAÑA 4: DETALLE DE DEUDA POR PROVEEDOR -->
+        <div id="tabDetalleProveedores" style="display: none;">
+            <div class="card shadow-sm border-0 mt-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center p-3">
+                    <div>
+                        <h5 class="mb-1 fw-bold text-dark"><i class="bi bi-card-list me-2 text-primary"></i>Detalle por Proveedor</h5>
+                        <small class="text-muted">Pagos pendientes programados por mes y saldo que aún no está programado.</small>
+                    </div>
+                    <select id="selectAnioDetalleProveedores" class="form-select form-select-sm" style="width: 130px;" onchange="cargarDetalleProveedores()">
+                        <option value="2026" selected>Año 2026</option>
+                        <option value="2025">Año 2025</option>
+                    </select>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 75vh;">
+                        <table class="table table-bordered table-hover table-sm align-middle mb-0 text-nowrap" id="tablaDetalleProveedores">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th class="sticky-col text-start">Proveedor</th>
+                                    <th>Enero</th><th>Febrero</th><th>Marzo</th><th>Abril</th>
+                                    <th>Mayo</th><th>Junio</th><th>Julio</th><th>Agosto</th>
+                                    <th>Septiembre</th><th>Octubre</th><th>Noviembre</th><th>Diciembre</th>
+                                    <th>No programado</th><th>Total pendiente</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoDetalleProveedores">
+                                <tr><td colspan="15" class="text-center text-muted py-4">Abre esta pestaña para cargar el detalle.</td></tr>
+                            </tbody>
+                            <tfoot id="pieDetalleProveedores" class="table-light fw-bold"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
 <!-- Modal Selección de Facturas para PDF -->
@@ -508,40 +543,6 @@
             </div>
         </div>
 
-        <!-- PESTAÑA 4: DETALLE DE DEUDA POR PROVEEDOR -->
-        <div id="tabDetalleProveedores" style="display: none;">
-            <div class="card shadow-sm border-0 mt-3">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center p-3">
-                    <div>
-                        <h5 class="mb-1 fw-bold text-dark"><i class="bi bi-card-list me-2 text-primary"></i>Detalle por Proveedor</h5>
-                        <small class="text-muted">Pagos pendientes programados por mes y saldo que aún no está programado.</small>
-                    </div>
-                    <select id="selectAnioDetalleProveedores" class="form-select form-select-sm" style="width: 130px;" onchange="cargarDetalleProveedores()">
-                        <option value="2026" selected>Año 2026</option>
-                        <option value="2025">Año 2025</option>
-                    </select>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 75vh;">
-                        <table class="table table-bordered table-hover table-sm align-middle mb-0 text-nowrap" id="tablaDetalleProveedores">
-                            <thead class="table-dark sticky-top">
-                                <tr>
-                                    <th class="sticky-col text-start">Proveedor</th>
-                                    <th>Enero</th><th>Febrero</th><th>Marzo</th><th>Abril</th>
-                                    <th>Mayo</th><th>Junio</th><th>Julio</th><th>Agosto</th>
-                                    <th>Septiembre</th><th>Octubre</th><th>Noviembre</th><th>Diciembre</th>
-                                    <th>No programado</th><th>Total pendiente</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cuerpoDetalleProveedores">
-                                <tr><td colspan="15" class="text-center text-muted py-4">Abre esta pestaña para cargar el detalle.</td></tr>
-                            </tbody>
-                            <tfoot id="pieDetalleProveedores" class="table-light fw-bold"></tfoot>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- MODAL GASTOS FIJOS -->
