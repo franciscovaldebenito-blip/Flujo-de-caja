@@ -2194,31 +2194,43 @@ async function procesarExcelVentas() {
 let facturasDisponiblesPDF = [];
 
 function abrirModalPDF() {
-    // Nombre del proveedor seleccionado
-    const proveedorInput = document.getElementById('selectProveedor') || document.getElementById('inputProveedor');
-    const proveedorNombre = proveedorInput ? proveedorInput.value : 'Nipro Medical Corporation';
+    const proveedorNombre = labSeleccionadoActivo?.nombre || '';
+    facturasDisponiblesPDF = [];
 
-    facturasDisponiblesPDF = []; 
+    // Leer exclusivamente las tablas de la consulta del proveedor actual.
+    // No recorrer todas las tablas de la página: el resumen y otras secciones
+    // también contienen textos como "N°" y podían colarse en el plan PDF.
+    const agregarFacturaPDF = (fila, columnaDocumento, columnaFecha, columnaMonto, fechaPorDefecto) => {
+        const cols = fila.querySelectorAll('td');
+        if (cols.length <= Math.max(columnaDocumento, columnaMonto) || (columnaFecha >= 0 && cols.length <= columnaFecha)) return;
 
-    // Capturar facturas visibles en las tablas
-    document.querySelectorAll('table tbody tr').forEach((tr, index) => {
-        const cols = tr.querySelectorAll('td');
-        // Verificamos que sea una fila con datos de factura
-        if (cols.length >= 4 && tr.innerText.includes('N°')) {
-            const numFac = cols[1]?.innerText.replace('N°', '').trim() || cols[0]?.innerText.trim();
-            const fecha = cols[0]?.innerText.trim();
-            const montoTexto = cols[4]?.innerText.trim() || cols[3]?.innerText.trim() || '$0';
-            const montoNumero = parseFloat(montoTexto.replace(/[^0-9.-]+/g, "")) || 0;
+        const textoDocumento = cols[columnaDocumento].innerText.trim();
+        const coincidencia = textoDocumento.match(/^N\s*[°º]\s*(.+)$/i);
+        if (!coincidencia) return;
+        const numFactura = coincidencia[1].trim();
+        if (!numFactura) return;
 
-            facturasDisponiblesPDF.push({
-                id: index,
-                numFactura: numFac,
-                fechaPago: fecha.includes('/') || fecha.includes('-') ? fecha : 'POR PROGRAMAR',
-                montoStr: montoTexto,
-                montoNum: montoNumero,
-                proveedor: proveedorNombre
-            });
-        }
+        const montoStr = cols[columnaMonto].innerText.trim();
+        if (!montoStr || montoStr === '—' || montoStr === '-') return;
+
+        facturasDisponiblesPDF.push({
+            id: facturasDisponiblesPDF.length,
+            numFactura,
+            fechaPago: (columnaFecha >= 0 ? cols[columnaFecha].innerText.trim() : '') || fechaPorDefecto,
+            montoStr,
+            proveedor: proveedorNombre
+        });
+    };
+
+    // Agendadas: Fecha pago | N° factura | Proveedor | Estado | Monto...
+    document.querySelectorAll('#tablaAgendadasLab tr').forEach(fila => {
+        agregarFacturaPDF(fila, 1, 0, 4, 'POR PROGRAMAR');
+    });
+
+    // Sin agendar: N° factura | Emisión | Vencimiento | Monto...
+    // Son del mismo proveedor porque esta tabla la alimenta la consulta activa.
+    document.querySelectorAll('#tablaPorAgendarLab tr').forEach(fila => {
+        agregarFacturaPDF(fila, 0, -1, 3, 'POR PROGRAMAR');
     });
 
     const tbody = document.getElementById('bodyCheckboxesPDF');
