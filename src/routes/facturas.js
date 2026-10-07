@@ -5,6 +5,75 @@ import exceljs from 'exceljs';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+const nombresProveedoresQueSonGastosFijos = [
+    'Seguract Spa',
+    'Speed Tel-cargo Limitada',
+    'Solunion Chile Seguros De Credito S.a.',
+    'Compania De Petroleos De Chile Copec S.a.',
+    'Servicios Equifax Chile Ltda.',
+    'Dimerc S. A.',
+    'Transbank S.a.',
+    'Taller Automotriz Movil Patricio Campos Spa',
+    'Tu Socio Estrategico Spa',
+    'Runa Spa',
+    'Mercadolibre Chile Ltda',
+    'Sociedad Operadora De Tarjetas De Pago Santander G',
+    'Selectum Consultores Limitada',
+    'Genera Spa',
+    'Comercial Zero Spa',
+    'Quality Water Service Chile Spa',
+    'Wom S.a.',
+    'El Container Spa',
+    'Bci Seguros Generales S.a.',
+    'Smart Pest Control Soluciones Inteligentes En El',
+    'Soc Concesionaria Autopista Central S A',
+    'Allamand Marin Abogados Limitada',
+    'Asesoria Informatica Financiera Spa',
+    'Telefonica Chile S.a',
+    'Entel Pcs Telecomunicaciones S.a.',
+    'Soc. Conc. Autopista Nueva Vespucio Sur S.a.',
+    'Extintores Metropolitano Spa',
+    'Sociedad Concesionaria Costanera Norte S.a.',
+    'Comercializadora Don Lucas Limitada',
+    'Guillermo Morales Ltda.',
+    'Admin. De Supermercados Hiper Limitada',
+    'Valenzuela Y Miranda Cia. Limitada',
+    'Industrializadora De Sistemas Contra Incendio Fire',
+    'Ausin Hnos S A',
+    'Banco De Chile',
+    'Sociedad Concesionaria Nueva Vespucio Norte Expres',
+    'Sociedad Comercial Ikseg Limitada',
+    'Transportes Antillanca Spa',
+    'Comercializadora Top Shoe Spa',
+    'Gastronomia Limarios Spa',
+    'Santander - Chile',
+    'Ruta Del Maipo Sociedad Concesionaria, S.a.',
+    'Banco De Credito E Inversiones',
+    'Sociedad Concesionaria Vespucio Oriente S.a.',
+    'Operadora De Sistemas Electronicos Spa',
+    'Servivet Serv E Insumos Veterinarios Ltda'
+];
+
+function normalizarNombreProveedor(nombre) {
+    return String(nombre || '')
+        .toLowerCase()
+        .replace(/ã.{0,12}±/g, 'n')
+        .replace(/ã[‰©]/g, 'e')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+const proveedoresGastosFijosNormalizados = nombresProveedoresQueSonGastosFijos
+    .map(normalizarNombreProveedor);
+
+function esProveedorRegistradoComoGastoFijo(nombre) {
+    const normalizado = normalizarNombreProveedor(nombre);
+    return proveedoresGastosFijosNormalizados.some(alias => normalizado.startsWith(alias));
+}
+
 async function obtenerTodasLasFilas(crearConsulta) {
     const filas = [];
     const tamanoLote = 1000;
@@ -122,6 +191,7 @@ router.get('/resumen-proveedores', async (req, res) => {
                 total_programado: proveedor.meses.reduce((total, monto) => total + monto, 0),
                 total_pendiente: proveedor.meses.reduce((total, monto) => total + monto, proveedor.no_programado)
             }))
+            .filter(proveedor => !esProveedorRegistradoComoGastoFijo(proveedor.proveedor_nombre))
             .filter(proveedor => proveedor.total_pendiente > 0)
             .sort((a, b) => b.total_pendiente - a.total_pendiente || a.proveedor_nombre.localeCompare(b.proveedor_nombre, 'es'));
 
