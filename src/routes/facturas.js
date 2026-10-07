@@ -5,6 +5,133 @@ import exceljs from 'exceljs';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+async function obtenerTodasLasFilas(crearConsulta) {
+    const filas = [];
+    const tamanoLote = 1000;
+    let desde = 0;
+
+    while (true) {
+        const { data, error } = await crearConsulta().range(desde, desde + tamanoLote - 1);
+        if (error) throw error;
+        filas.push(...(data || []));
+        if (!data || data.length < tamanoLote) break;
+        desde += tamanoLote;
+    }
+
+    return filas;
+}
+
+router.get('/resumen-proveedores', async (req, res) => {
+    try {
+        const anio = Number.parseInt(req.query.anio, 10);
+        if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) {
+            return res.status(400).json({ exito: false, error: 'Año inválido.' });
+        }
+
+        const [programadas, transitorias, saldos] = await Promise.all([
+            obtenerTodasLasFilas(() => req.supabase
+                .from('fc_facturas_programadas')
+                .select('proveedor_rut, proveedor_nombre, numero_doc, monto_pendiente, fecha_pago_programada, estado')
+                .gte('fecha_pago_programada', `${anio}-01-01`)
+                .lte('fecha_pago_programada', `${anio}-12-31`)),
+            obtenerTodasLasFilas(() => req.supabase
+                .from('fc_facturas_transitorias')
+                .select('proveedor_rut, proveedor_nombre, numero_doc, saldo, created_at')
+                .order('created_at', { ascending: true })),
+            obtenerTodasLasFilas(() => req.supabase
+                .from('fc_saldos_facturas')
+                .select('proveedor_rut, numero_doc, saldo_pendiente'))
+        ]);
+
+        const proveedores = new Map();
+        const obtenerProveedor = (rut, nombre) => {
+            const rutLimpio = String(rut || '').trim();
+            const nombreLimpio = String(nombre || '').trim();
+            if (!rutLimpio && !nombreLimpio) return null;
+            const clave = rutLimpio
+                ? `rut:${rutLimpio.toLowerCase()}`
+                : `nombre:${nombreLimpio.toLowerCase()}`;
+
+            if (!proveedores.has(clave)) {
+                proveedores.set(clave, {
+                    proveedor_rut: rutLimpio,
+                    proveedor_nombre: nombreLimpio || rutLimpio || 'Proveedor sin nombre',
+                    meses: Array(12).fill(0),
+                    no_programado: 0
+                });
+            } else if (nombreLimpio) {
+                proveedores.get(clave).proveedor_nombre = nombreLimpio;
+            }
+
+            return proveedores.get(clave);
+        };
+
+        for (const item of programadas) {
+            if (String(item.estado || 'pendiente').toLowerCase() !== 'pendiente') continue;
+            const fecha = String(item.fecha_pago_programada || '').slice(0, 10);
+            const mes = Number.parseInt(fecha.slice(5, 7), 10);
+            if (!Number.isInteger(mes) || mes < 1 || mes > 12) continue;
+            const proveedor = obtenerProveedor(item.proveedor_rut, item.proveedor_nombre);
+            if (proveedor) proveedor.meses[mes - 1] += Number(item.monto_pendiente || 0);
+        }
+
+        const llaveFactura = (rut, numeroDoc) => {
+            const doc = String(numeroDoc || '').trim();
+            if (!doc) return null;
+            const identificador = String(rut || '').trim().toLowerCase();
+            return `${identificador}|${doc.toLowerCase()}`;
+        };
+        const facturas = new Map();
+
+        // La transitoria aporta nombre y saldo inicial; created_at permite
+        // conservar la fila más reciente si el documento aparece más de una vez.
+        for (const item of transitorias) {
+            const llave = llaveFactura(item.proveedor_rut, item.numero_doc);
+            if (!llave) continue;
+            facturas.set(llave, {
+                proveedor_rut: item.proveedor_rut,
+                proveedor_nombre: item.proveedor_nombre,
+                numero_doc: item.numero_doc,
+                saldo: Number(item.saldo || 0)
+            });
+        }
+
+        // Cuando existe, el saldo guardado es el remanente después de programar abonos.
+        for (const item of saldos) {
+            const llave = llaveFactura(item.proveedor_rut, item.numero_doc);
+            if (!llave) continue;
+            const factura = facturas.get(llave) || {
+                proveedor_rut: item.proveedor_rut,
+                proveedor_nombre: '',
+                numero_doc: item.numero_doc,
+                saldo: 0
+            };
+            factura.saldo = Number(item.saldo_pendiente || 0);
+            facturas.set(llave, factura);
+        }
+
+        for (const factura of facturas.values()) {
+            if (factura.saldo <= 0) continue;
+            const proveedor = obtenerProveedor(factura.proveedor_rut, factura.proveedor_nombre);
+            if (proveedor) proveedor.no_programado += factura.saldo;
+        }
+
+        const resultado = Array.from(proveedores.values())
+            .map(proveedor => ({
+                ...proveedor,
+                total_programado: proveedor.meses.reduce((total, monto) => total + monto, 0),
+                total_pendiente: proveedor.meses.reduce((total, monto) => total + monto, proveedor.no_programado)
+            }))
+            .filter(proveedor => proveedor.total_pendiente > 0)
+            .sort((a, b) => b.total_pendiente - a.total_pendiente || a.proveedor_nombre.localeCompare(b.proveedor_nombre, 'es'));
+
+        res.json({ exito: true, anio, proveedores: resultado });
+    } catch (error) {
+        console.error('Error al generar resumen de proveedores:', error);
+        res.status(500).json({ exito: false, error: error.message });
+    }
+});
+
 // Helper para convertir fechas de Excel (serial o string DD-MM-YYYY) a ISO (YYYY-MM-DD)
 function formatearFecha(valor) {
     if (!valor) return null;

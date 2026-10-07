@@ -87,6 +87,8 @@
         .monto-badge-gasto:hover { background-color: #fee2e2; transform: scale(1.04); }
         .celda-resumen-clicable { cursor: pointer; color: #1d4ed8 !important; text-decoration: underline dotted; text-underline-offset: 2px; }
         .celda-resumen-clicable:hover, .celda-resumen-clicable:focus { background-color: #dbeafe !important; outline: 2px solid #93c5fd; outline-offset: -2px; }
+        #tablaDetalleProveedores th:first-child, #tablaDetalleProveedores td:first-child { min-width: 220px; }
+        #tablaDetalleProveedores td:first-child { background: #fff; }
         .auth-screen { position: fixed; inset: 0; z-index: 20000; display: grid; place-items: center; padding: 1rem; background: #f1f5f9; }
     </style>
 </head>
@@ -143,6 +145,9 @@
                     </li>
                     <li class="nav-item">
                         <button class="nav-link" id="resumen-tab" onclick="mostrarPestana('resumen')"><i class="bi bi-calendar3 me-1"></i> Resumen Mensual</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="detalle-proveedores-tab" onclick="mostrarPestana('detalle-proveedores')"><i class="bi bi-card-list me-1"></i> Detalle por Proveedor</button>
                     </li>
                 </ul>
             </div>
@@ -502,6 +507,41 @@
                 <div class="modal-footer p-2"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button></div>
             </div>
         </div>
+
+        <!-- PESTAÑA 4: DETALLE DE DEUDA POR PROVEEDOR -->
+        <div id="tabDetalleProveedores" style="display: none;">
+            <div class="card shadow-sm border-0 mt-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center p-3">
+                    <div>
+                        <h5 class="mb-1 fw-bold text-dark"><i class="bi bi-card-list me-2 text-primary"></i>Detalle por Proveedor</h5>
+                        <small class="text-muted">Pagos pendientes programados por mes y saldo que aún no está programado.</small>
+                    </div>
+                    <select id="selectAnioDetalleProveedores" class="form-select form-select-sm" style="width: 130px;" onchange="cargarDetalleProveedores()">
+                        <option value="2026" selected>Año 2026</option>
+                        <option value="2025">Año 2025</option>
+                    </select>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 75vh;">
+                        <table class="table table-bordered table-hover table-sm align-middle mb-0 text-nowrap" id="tablaDetalleProveedores">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th class="sticky-col text-start">Proveedor</th>
+                                    <th>Enero</th><th>Febrero</th><th>Marzo</th><th>Abril</th>
+                                    <th>Mayo</th><th>Junio</th><th>Julio</th><th>Agosto</th>
+                                    <th>Septiembre</th><th>Octubre</th><th>Noviembre</th><th>Diciembre</th>
+                                    <th>No programado</th><th>Total pendiente</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoDetalleProveedores">
+                                <tr><td colspan="15" class="text-center text-muted py-4">Abre esta pestaña para cargar el detalle.</td></tr>
+                            </tbody>
+                            <tfoot id="pieDetalleProveedores" class="table-light fw-bold"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- MODAL GASTOS FIJOS -->
@@ -755,6 +795,7 @@ function mostrarPestana(tipo) {
     document.getElementById('tabFlujoCaja').style.display = 'none';
     document.getElementById('tabConsultaLaboratorio').style.display = 'none';
     document.getElementById('tabResumenMensual').style.display = 'none';
+    document.getElementById('tabDetalleProveedores').style.display = 'none';
 
     if (tipo === 'flujo') { 
         tabs[0].classList.add('active'); 
@@ -770,7 +811,57 @@ function mostrarPestana(tipo) {
         if (typeof cargarResumenMensual === 'function') {
             cargarResumenMensual();
         }
+    } else if (tipo === 'detalle-proveedores') {
+        document.getElementById('detalle-proveedores-tab').classList.add('active');
+        document.getElementById('tabDetalleProveedores').style.display = 'block';
+        cargarDetalleProveedores();
     }
+}
+
+async function cargarDetalleProveedores() {
+    const tbody = document.getElementById('cuerpoDetalleProveedores');
+    const tfoot = document.getElementById('pieDetalleProveedores');
+    const anio = document.getElementById('selectAnioDetalleProveedores').value;
+    const formatoMoneda = monto => '$' + (Number(monto) || 0).toLocaleString('es-CL');
+
+    tbody.innerHTML = '<tr><td colspan="15" class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando proveedores...</td></tr>';
+    tfoot.innerHTML = '';
+
+    try {
+        const response = await fetch(`/api/facturas/resumen-proveedores?anio=${encodeURIComponent(anio)}`);
+        const resultado = await response.json();
+        if (!response.ok || !resultado.exito) throw new Error(resultado.error || 'No se pudo cargar el detalle de proveedores.');
+
+        const proveedores = resultado.proveedores || [];
+        if (!proveedores.length) {
+            tbody.innerHTML = '<tr><td colspan="15" class="text-center text-muted py-4">No hay saldos pendientes para este período.</td></tr>';
+            return;
+        }
+
+        const totalesMes = Array(12).fill(0);
+        let totalNoProgramado = 0;
+        let totalPendiente = 0;
+        tbody.innerHTML = proveedores.map(proveedor => {
+            const meses = Array.isArray(proveedor.meses) ? proveedor.meses : Array(12).fill(0);
+            meses.forEach((monto, indice) => { totalesMes[indice] += Number(monto) || 0; });
+            totalNoProgramado += Number(proveedor.no_programado) || 0;
+            totalPendiente += Number(proveedor.total_pendiente) || 0;
+            const celdasMes = meses.map(monto => `<td class="text-end">${formatoMoneda(monto)}</td>`).join('');
+            const nombre = escaparTextoHTML(proveedor.proveedor_nombre || proveedor.proveedor_rut || 'Proveedor sin nombre');
+            return `<tr><td class="sticky-col fw-semibold">${nombre}</td>${celdasMes}<td class="text-end text-warning-emphasis fw-semibold">${formatoMoneda(proveedor.no_programado)}</td><td class="text-end fw-bold">${formatoMoneda(proveedor.total_pendiente)}</td></tr>`;
+        }).join('');
+
+        tfoot.innerHTML = `<tr><th class="sticky-col">Total</th>${totalesMes.map(monto => `<td class="text-end">${formatoMoneda(monto)}</td>`).join('')}<td class="text-end">${formatoMoneda(totalNoProgramado)}</td><td class="text-end">${formatoMoneda(totalPendiente)}</td></tr>`;
+    } catch (error) {
+        console.error('Error al cargar detalle por proveedor:', error);
+        tbody.innerHTML = `<tr><td colspan="15" class="text-center text-danger py-4">${escaparTextoHTML(error.message)}</td></tr>`;
+    }
+}
+
+function escaparTextoHTML(valor) {
+    return String(valor).replace(/[&<>"']/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[caracter]));
 }
         function formatearFecha(fechaStr) {
             if (!fechaStr || fechaStr === 'S/I') return 'S/I';
