@@ -376,10 +376,7 @@
                         <i class="bi bi-calendar-range me-2 text-primary"></i>Resumen Mensual
                     </h5>
                     <div class="d-flex gap-2">
-                        <select id="selectAnioResumen" class="form-select form-select-sm" style="width: 130px;" onchange="cargarResumenMensual()">
-                            <option value="2026" selected>Año 2026</option>
-                            <option value="2025">Año 2025</option>
-                        </select>
+                        <select id="selectAnioResumen" class="form-select form-select-sm" style="width: 130px;" onchange="cargarResumenMensual()"></select>
                     </div>
                 </div>
                 <div class="card-body p-0">
@@ -422,10 +419,7 @@
                         <h5 class="mb-1 fw-bold text-dark"><i class="bi bi-card-list me-2 text-primary"></i>Detalle por Proveedor</h5>
                         <small class="text-muted">Pagos pendientes programados por mes y saldo que aún no está programado.</small>
                     </div>
-                    <select id="selectAnioDetalleProveedores" class="form-select form-select-sm" style="width: 130px;" onchange="cargarDetalleProveedores()">
-                        <option value="2026" selected>Año 2026</option>
-                        <option value="2025">Año 2025</option>
-                    </select>
+                    <select id="selectAnioDetalleProveedores" class="form-select form-select-sm" style="width: 130px;" onchange="cargarDetalleProveedores()"></select>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive" style="max-height: 75vh;">
@@ -767,8 +761,32 @@ async function cerrarSesionAplicacion() {
         let labSeleccionadoActivo = { rut: '', nombre: '' };
         const nombresMeses = { 1:'Enero', 2:'Febrero', 3:'Marzo', 4:'Abril', 5:'Mayo', 6:'Junio', 7:'Julio', 8:'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre' };
 
+        function inicializarSelectoresAnio() {
+            const anioActual = new Date().getFullYear();
+            const anioInicial = anioActual - 2;
+            const anioFinal = anioActual + 5;
+
+            ['selectAnioResumen', 'selectAnioDetalleProveedores'].forEach(id => {
+                const selector = document.getElementById(id);
+                if (!selector) return;
+
+                const anioPrevio = Number(selector.value);
+                selector.innerHTML = Array.from(
+                    { length: anioFinal - anioInicial + 1 },
+                    (_, indice) => anioInicial + indice
+                ).map(anio => `<option value="${anio}">Año ${anio}</option>`).join('');
+
+                selector.value = String(
+                    Number.isInteger(anioPrevio) && anioPrevio >= anioInicial && anioPrevio <= anioFinal
+                        ? anioPrevio
+                        : anioActual
+                );
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', async () => { 
             modalDetalleInstance = new bootstrap.Modal(document.getElementById('modalDetalleDocumentos')); 
+            inicializarSelectoresAnio();
             generarColumnasDias(); 
             if (!supabaseClient) {
                 document.getElementById('mensajeInicioSesion').textContent = 'Falta la configuración de Supabase en este servidor. Abre la URL publicada de la aplicación o inicia el servidor Node configurado.';
