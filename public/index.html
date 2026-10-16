@@ -2305,6 +2305,18 @@ async function procesarExcelVentas() {
 
 let facturasDisponiblesPDF = [];
 
+function obtenerFechaOrdenPDF(fechaTexto) {
+    const texto = String(fechaTexto || '').trim();
+    let partes = texto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (partes) return Date.UTC(Number(partes[3]), Number(partes[2]) - 1, Number(partes[1]));
+
+    partes = texto.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (partes) return Date.UTC(Number(partes[1]), Number(partes[2]) - 1, Number(partes[3]));
+
+    // Fechas como "POR PROGRAMAR" se mantienen al final del listado.
+    return Number.POSITIVE_INFINITY;
+}
+
 function abrirModalPDF() {
     const proveedorNombre = labSeleccionadoActivo?.nombre || '';
     facturasDisponiblesPDF = [];
@@ -2343,6 +2355,15 @@ function abrirModalPDF() {
     // Son del mismo proveedor porque esta tabla la alimenta la consulta activa.
     document.querySelectorAll('#tablaPorAgendarLab tr').forEach(fila => {
         agregarFacturaPDF(fila, 0, -1, 3, 'POR PROGRAMAR');
+    });
+
+    // Mantener el mismo orden cronológico en el selector y en el PDF:
+    // primero la fecha más antigua; lo que no tenga fecha queda al final.
+    facturasDisponiblesPDF.sort((a, b) => {
+        const fechaA = obtenerFechaOrdenPDF(a.fechaPago);
+        const fechaB = obtenerFechaOrdenPDF(b.fechaPago);
+        if (fechaA !== fechaB) return fechaA - fechaB;
+        return String(a.numFactura).localeCompare(String(b.numFactura), 'es', { numeric: true });
     });
 
     const tbody = document.getElementById('bodyCheckboxesPDF');
