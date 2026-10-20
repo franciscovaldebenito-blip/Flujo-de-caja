@@ -574,7 +574,7 @@
                 </div>
                 <div class="modal-footer p-2 bg-light d-flex justify-content-between">
                     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-sm btn-danger fw-bold" onclick="guardarGastosFijosProgramados()">
+                    <button type="button" id="btnGuardarGastosFijos" class="btn btn-sm btn-danger fw-bold" onclick="guardarGastosFijosProgramados()">
                         <i class="bi bi-save me-1"></i> Guardar Programación
                     </button>
                 </div>
@@ -1602,6 +1602,14 @@ async function cargarCatalogoGastosFijos() {
 }
 
 async function guardarGastosFijosProgramados() {
+    const botonGuardar = document.getElementById('btnGuardarGastosFijos');
+    if (botonGuardar?.disabled) return;
+    const contenidoOriginalBoton = botonGuardar?.innerHTML;
+    if (botonGuardar) {
+        botonGuardar.disabled = true;
+        botonGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Guardando...';
+    }
+
     const filas = document.querySelectorAll('#tablaGastosFijosBody tr');
     const gastosAEnviar = [];
 
@@ -1634,6 +1642,10 @@ async function guardarGastosFijosProgramados() {
         alerta.className = 'alert alert-warning py-2 mb-3 small';
         alerta.textContent = 'Selecciona una fecha a programar y un monto mayor a $0 en al menos un gasto.';
         alerta.classList.remove('d-none');
+        if (botonGuardar) {
+            botonGuardar.disabled = false;
+            botonGuardar.innerHTML = contenidoOriginalBoton;
+        }
         return;
     }
 
@@ -1654,21 +1666,22 @@ async function guardarGastosFijosProgramados() {
         alerta.textContent = respuesta.mensaje || 'Gastos fijos programados correctamente.';
         alerta.classList.remove('d-none');
 
-        // Volvemos a cargar la matriz y actualizar las cards del encabezado
-        cargarMatriz();
-        if (typeof cargarMontosMesesFuturos === 'function') {
-            cargarMontosMesesFuturos();
-        }
-
-        // Re-cargamos la tabla dentro del modal para refrescar los avisos visuales
-        setTimeout(() => {
-            cargarCatalogoGastosFijos();
-        }, 800);
+        // Esperamos a que se actualicen el flujo, los totales y el estado del modal.
+        await Promise.all([
+            cargarMatriz(),
+            typeof cargarMontosMesesFuturos === 'function' ? cargarMontosMesesFuturos() : Promise.resolve(),
+            cargarCatalogoGastosFijos()
+        ]);
 
     } catch (err) {
         alerta.className = 'alert alert-danger py-2 mb-3 small';
         alerta.textContent = err.message;
         alerta.classList.remove('d-none');
+    } finally {
+        if (botonGuardar) {
+            botonGuardar.disabled = false;
+            botonGuardar.innerHTML = contenidoOriginalBoton;
+        }
     }
 }
 
