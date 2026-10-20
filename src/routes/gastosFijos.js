@@ -83,19 +83,64 @@ router.post('/programar', async (req, res) => {
             return res.status(400).json({ exito: false, error: 'No se enviaron gastos para programar.' });
         }
 
-        const registros = gastos.map(g => ({
-            concepto: g.concepto,
-            monto: g.monto,
+        const gastosValidos = gastos.filter(g =>
+            g && typeof g.concepto === 'string' && g.concepto.trim() &&
+            Number.isFinite(Number(g.monto)) && Number(g.monto) > 0 &&
+            /^\d{4}-\d{2}-\d{2}$/.test(g.fecha_pago_programada || '')
+        );
+
+        if (!gastosValidos.length) {
+            return res.status(400).json({ exito: false, error: 'Revisa que cada gasto tenga concepto, monto mayor a cero y fecha válida.' });
+        }
+
+        const actualizaciones = gastosValidos.filter(g => g.id);
+        const nuevos = gastosValidos.filter(g => !g.id).map(g => ({
+            concepto: g.concepto.trim(),
+            monto: Number(g.monto),
             fecha_pago_programada: g.fecha_pago_programada,
             estado: 'pendiente'
         }));
 
-        const { data, error } = await req.supabase
-            .from('fc_gastos_fijos_programados')
-            .insert(registros);
+        const datosGuardados = [];
+        for (const gasto of actualizaciones) {
+            const { data, error } = await req.supabase
+                .from('fc_gastos_fijos_programados')
+                .update({
+                    monto: Number(gasto.monto),
+                    fecha_pago_programada: gasto.fecha_pago_programada
+                })
+                .eq('id', gasto.id)
+                .eq('estado', 'pendiente')
+                .select('id, concepto, monto, fecha_pago_programada, estado')
+                .maybeSingle();
 
-        if (error) throw error;
-        res.json({ exito: true, mensaje: 'Gastos fijos programados con éxito.', datos: data });
+            if (error) throw error;
+            if (!data) {
+                return res.status(409).json({
+                    exito: false,
+                    error: `No se pudo modificar “${gasto.concepto}”. Puede que ya esté pagado o que haya cambiado mientras editabas.`
+                });
+            }
+            datosGuardados.push(data);
+        }
+
+        if (nuevos.length) {
+            const { data, error } = await req.supabase
+                .from('fc_gastos_fijos_programados')
+                .insert(nuevos)
+                .select('id, concepto, monto, fecha_pago_programada, estado');
+
+            if (error) throw error;
+            datosGuardados.push(...(data || []));
+        }
+
+        const cantidadActualizada = datosGuardados.filter(g => actualizaciones.some(a => a.id === g.id)).length;
+        const cantidadNueva = datosGuardados.length - cantidadActualizada;
+        res.json({
+            exito: true,
+            mensaje: `Programación guardada: ${cantidadActualizada} actualizada(s) y ${cantidadNueva} nueva(s).`,
+            datos: datosGuardados
+        });
     } catch (err) {
         console.error('Error al programar gastos fijos:', err);
         res.status(500).json({ exito: false, error: err.message });

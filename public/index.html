@@ -1562,12 +1562,13 @@ async function cargarCatalogoGastosFijos() {
 
             const montoMostrar = yaProgramado ? yaProgramado.monto : (gasto.monto_promedio || 0);
             const fechaMostrar = yaProgramado ? yaProgramado.fecha_pago_programada || yaProgramado.fecha : '';
+            const yaPagado = yaProgramado && String(yaProgramado.estado || '').toLowerCase() === 'pagado';
 
             // Badge/Aviso visual si ya existe asignación
             const avisoHTML = yaProgramado ? `
                 <div class="mt-1">
-                    <span class="badge bg-warning text-dark style-badge" style="font-size: 0.65rem;">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Asignado este mes ($${Number(yaProgramado.monto).toLocaleString('es-CL')})
+                    <span class="badge ${yaPagado ? 'bg-success' : 'bg-warning text-dark'} style-badge" style="font-size: 0.65rem;">
+                        <i class="bi ${yaPagado ? 'bi-check-circle-fill' : 'bi-calendar-check-fill'} me-1"></i>${yaPagado ? 'Ya pagado' : 'Programado este mes · puedes editar fecha y monto'}
                     </span>
                 </div>
             ` : '';
@@ -1577,16 +1578,18 @@ async function cargarCatalogoGastosFijos() {
                     <td class="fw-semibold align-middle">
                         ${gasto.concepto}
                         <input type="hidden" class="gf-concepto" value="${gasto.concepto}">
+                        <input type="hidden" class="gf-id" value="${yaProgramado?.id || ''}">
+                        <input type="hidden" class="gf-estado" value="${yaProgramado?.estado || ''}">
                         ${avisoHTML}
                     </td>
                     <td class="align-middle">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text">$</span>
-                            <input type="number" class="form-control text-end fw-bold gf-monto" value="${montoMostrar}" min="0">
+                            <input type="number" class="form-control text-end fw-bold gf-monto" value="${montoMostrar}" min="0" ${yaPagado ? 'disabled' : ''}>
                         </div>
                     </td>
                     <td class="align-middle">
-                        <input type="date" class="form-control form-control-sm gf-fecha" value="${fechaMostrar}">
+                        <input type="date" class="form-control form-control-sm gf-fecha" value="${fechaMostrar}" ${yaPagado ? 'disabled' : ''}>
                     </td>
                 </tr>
             `;
@@ -1611,9 +1614,12 @@ async function guardarGastosFijosProgramados() {
             const concepto = conceptoInput.value;
             const monto = parseFloat(montoInput.value) || 0;
             const fecha = fechaInput.value;
+            const id = fila.querySelector('.gf-id')?.value || '';
+            const estado = fila.querySelector('.gf-estado')?.value || '';
 
-            if (fecha && monto > 0) {
+            if (fecha && monto > 0 && estado.toLowerCase() !== 'pagado') {
                 gastosAEnviar.push({
+                    id: id || null,
                     concepto: concepto,
                     monto: monto,
                     fecha_pago_programada: fecha
