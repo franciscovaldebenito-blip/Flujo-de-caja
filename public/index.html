@@ -1897,6 +1897,18 @@ async function guardarFechasMasivasFacturas() {
             agendadasFiltradas = agendadasFiltradas.filter(a => (a.estado || 'pendiente') === estadoFiltro); 
         }
 
+        // Orden cronológico ascendente: la fecha de pago más próxima aparece primero.
+        agendadasFiltradas.sort((a, b) => {
+            const fechaA = String(a.fecha_pago_programada || '').split('T')[0];
+            const fechaB = String(b.fecha_pago_programada || '').split('T')[0];
+            if (fechaA !== fechaB) {
+                if (!fechaA) return 1;
+                if (!fechaB) return -1;
+                return fechaA.localeCompare(fechaB);
+            }
+            return String(a.numero_doc || '').localeCompare(String(b.numero_doc || ''), 'es', { numeric: true });
+        });
+
         let totalAgendado = 0;
         if (!agendadasFiltradas.length) {
             tablaAgendadas.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No hay facturas agendadas para los criterios seleccionados.</td></tr>';
