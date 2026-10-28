@@ -91,6 +91,8 @@
         .celda-resumen-clicable:hover, .celda-resumen-clicable:focus { background-color: #dbeafe !important; outline: 2px solid #93c5fd; outline-offset: -2px; }
         #tablaDetalleProveedores th:first-child, #tablaDetalleProveedores td:first-child { min-width: 220px; }
         #tablaDetalleProveedores td:first-child { background: #fff; }
+        #tablaFacturasAgendadas .col-check-masiva { display: none; }
+        #tablaFacturasAgendadas.modo-edicion-masiva .col-check-masiva { display: table-cell; }
         .auth-screen { position: fixed; inset: 0; z-index: 20000; display: grid; place-items: center; padding: 1rem; background: #f1f5f9; }
     </style>
 </head>
@@ -323,10 +325,19 @@
             <div class="glass-card p-3 mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar-check text-success me-2"></i>Facturas Agendadas en Flujo de Caja</h6>
-                    <span class="badge bg-success-subtle text-success border fw-bold" id="totalMontoAgendado">$0</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="btnModoModificarVarias" onclick="alternarModoEdicionMasivaFacturas()">
+                            <i class="bi bi-pencil-square me-1"></i>Modificar varias
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success fw-bold d-none" id="btnGuardarFechasMasivas" onclick="guardarFechasMasivasFacturas()" disabled>
+                            <i class="bi bi-save me-1"></i>Guardar fechas
+                        </button>
+                        <span class="badge bg-success-subtle text-success border fw-bold" id="totalMontoAgendado">$0</span>
+                    </div>
                 </div>
+                <div id="mensajeFechasMasivas" class="alert d-none py-2 mb-2 small"></div>
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                    <table class="table table-hover align-middle mb-0" id="tablaFacturasAgendadas" style="font-size: 0.78rem;">
                         <thead class="table-dark">
                             <tr>
                                 <th>Fecha Pago</th>
@@ -336,10 +347,11 @@
                                 <th>Monto</th>
                                 <th>Nueva Fecha</th>
                                 <th class="text-end">Acciones</th>
+                                <th class="col-check-masiva"><input type="checkbox" class="form-check-input" id="checkTodasFechasMasivas" onchange="seleccionarTodasFechasMasivas(this)"></th>
                             </tr>
                         </thead>
                         <tbody id="tablaAgendadasLab">
-                            <tr><td colspan="7" class="text-center text-muted py-4">Seleccione un laboratorio para consultar sus facturas agendadas.</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-4">Seleccione un laboratorio para consultar sus facturas agendadas.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1475,13 +1487,20 @@ async function revertirPago(tipo, id) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id, fecha: nuevaFecha })
                 });
-                const data = await res.json();
-                if (res.ok) { 
-                    alert('✅ Fecha actualizada correctamente.'); 
-                    modalDetalleInstance.hide(); 
-                    cargarMatriz(); 
-                    cargarMontosMesesFuturos(); 
-                    if (labSeleccionadoActivo.rut) cargarConsultaLaboratorio(); 
+                let data;
+                try {
+                    data = await res.json();
+                } catch {
+                    throw new Error(`El servidor respondió con una página HTML (HTTP ${res.status}). La ruta de reagendamiento debe estar desplegada.`);
+                }
+                if (res.ok) {
+                    alert('✅ Fecha actualizada correctamente.');
+                    if (modalDetalleInstance) modalDetalleInstance.hide();
+                    await Promise.all([
+                        cargarMatriz(),
+                        cargarMontosMesesFuturos(),
+                        labSeleccionadoActivo.rut ? cargarConsultaLaboratorio() : Promise.resolve()
+                    ]);
                 } else {
                     alert(`⚠️ Error: ${data.error || 'No se pudo reagendar.'}`);
                 }
@@ -1740,13 +1759,132 @@ async function agregarNuevoGastoCatalogo() {
             cargarConsultaLaboratorio();
         }
 
+let modoEdicionMasivaFacturas = false;
+
+function alternarModoEdicionMasivaFacturas() {
+    if (modoEdicionMasivaFacturas) {
+        cancelarEdicionMasivaFacturas();
+        return;
+    }
+
+    modoEdicionMasivaFacturas = true;
+    document.getElementById('mensajeFechasMasivas').classList.add('d-none');
+    document.getElementById('tablaFacturasAgendadas').classList.add('modo-edicion-masiva');
+    document.getElementById('btnModoModificarVarias').innerHTML = '<i class="bi bi-x-lg me-1"></i>Cancelar';
+    document.getElementById('btnGuardarFechasMasivas').classList.remove('d-none');
+    document.getElementById('checkTodasFechasMasivas').checked = false;
+    document.querySelectorAll('.seleccion-factura-masiva').forEach(check => {
+        check.checked = false;
+        const fecha = document.getElementById(`fecha_FACTURA_${check.dataset.id}`);
+        if (fecha) fecha.disabled = true;
+    });
+    actualizarBotonGuardarMasivo();
+}
+
+function cancelarEdicionMasivaFacturas(restaurarFechas = true) {
+    document.querySelectorAll('.seleccion-factura-masiva').forEach(check => {
+        check.checked = false;
+        const fecha = document.getElementById(`fecha_FACTURA_${check.dataset.id}`);
+        if (fecha) {
+            if (restaurarFechas) fecha.value = fecha.dataset.fechaOriginal || '';
+            fecha.disabled = check.disabled;
+        }
+    });
+    modoEdicionMasivaFacturas = false;
+    document.getElementById('tablaFacturasAgendadas').classList.remove('modo-edicion-masiva');
+    document.getElementById('btnModoModificarVarias').innerHTML = '<i class="bi bi-pencil-square me-1"></i>Modificar varias';
+    document.getElementById('btnGuardarFechasMasivas').classList.add('d-none');
+    document.getElementById('btnGuardarFechasMasivas').disabled = true;
+    document.getElementById('checkTodasFechasMasivas').checked = false;
+}
+
+function habilitarFechaMasiva(check) {
+    const fecha = document.getElementById(`fecha_FACTURA_${check.dataset.id}`);
+    if (fecha) fecha.disabled = !check.checked;
+    actualizarBotonGuardarMasivo();
+}
+
+function seleccionarTodasFechasMasivas(checkPrincipal) {
+    document.querySelectorAll('.seleccion-factura-masiva').forEach(check => {
+        check.checked = checkPrincipal.checked;
+        habilitarFechaMasiva(check);
+    });
+}
+
+function actualizarBotonGuardarMasivo() {
+    const tieneSeleccion = document.querySelector('.seleccion-factura-masiva:checked');
+    const boton = document.getElementById('btnGuardarFechasMasivas');
+    if (boton && !boton.dataset.guardando) boton.disabled = !tieneSeleccion;
+}
+
+function mostrarMensajeFechasMasivas(tipo, texto) {
+    const mensaje = document.getElementById('mensajeFechasMasivas');
+    mensaje.className = `alert alert-${tipo} py-2 mb-2 small`;
+    mensaje.textContent = texto;
+    mensaje.classList.remove('d-none');
+}
+
+async function guardarFechasMasivasFacturas() {
+    const seleccionados = [...document.querySelectorAll('.seleccion-factura-masiva:checked')];
+    if (!seleccionados.length) {
+        mostrarMensajeFechasMasivas('warning', 'Selecciona al menos una factura para cambiar su fecha.');
+        return;
+    }
+
+    const cambios = seleccionados.map(check => ({
+        id: check.dataset.id,
+        fecha: document.getElementById(`fecha_FACTURA_${check.dataset.id}`)?.value || ''
+    }));
+    if (cambios.some(cambio => !cambio.fecha)) {
+        mostrarMensajeFechasMasivas('warning', 'Asigna una fecha a cada factura seleccionada.');
+        return;
+    }
+
+    const boton = document.getElementById('btnGuardarFechasMasivas');
+    const textoOriginal = boton.innerHTML;
+    boton.dataset.guardando = 'true';
+    boton.disabled = true;
+    boton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Guardando...';
+
+    try {
+        const res = await fetch('/api/facturas/reagendar-lote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cambios })
+        });
+        let data;
+        try {
+            data = await res.json();
+        } catch {
+            throw new Error(`El servidor respondió con una página HTML (HTTP ${res.status}). Revisa que el despliegue incluya la ruta de guardado masivo.`);
+        }
+        if (!res.ok || !data.exito) throw new Error(data.error || 'No se pudieron guardar las fechas.');
+
+        mostrarMensajeFechasMasivas('success', data.mensaje || `Se actualizaron ${cambios.length} fechas.`);
+        cancelarEdicionMasivaFacturas(false);
+        await Promise.all([
+            cargarConsultaLaboratorio(),
+            cargarMatriz(),
+            typeof cargarMontosMesesFuturos === 'function' ? cargarMontosMesesFuturos() : Promise.resolve()
+        ]);
+    } catch (error) {
+        mostrarMensajeFechasMasivas('danger', error.message);
+    } finally {
+        delete boton.dataset.guardando;
+        boton.disabled = false;
+        boton.innerHTML = textoOriginal;
+        if (modoEdicionMasivaFacturas) actualizarBotonGuardarMasivo();
+    }
+}
+
        async function cargarConsultaLaboratorio() {
     if (!labSeleccionadoActivo.rut && !labSeleccionadoActivo.nombre) return;
+    if (modoEdicionMasivaFacturas) cancelarEdicionMasivaFacturas();
     const tablaAgendadas = document.getElementById('tablaAgendadasLab');
     const tablaPorAgendar = document.getElementById('tablaPorAgendarLab');
     const estadoFiltro = document.getElementById('selectEstadoFlujo').value;
     
-    tablaAgendadas.innerHTML = '<tr><td colspan="7" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas...</td></tr>';
+    tablaAgendadas.innerHTML = '<tr><td colspan="8" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas...</td></tr>';
     tablaPorAgendar.innerHTML = '<tr><td colspan="6" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas sin agendar...</td></tr>';
     
     try {
@@ -1761,7 +1899,7 @@ async function agregarNuevoGastoCatalogo() {
 
         let totalAgendado = 0;
         if (!agendadasFiltradas.length) {
-            tablaAgendadas.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No hay facturas agendadas para los criterios seleccionados.</td></tr>';
+            tablaAgendadas.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No hay facturas agendadas para los criterios seleccionados.</td></tr>';
         } else {
             tablaAgendadas.innerHTML = agendadasFiltradas.map(f => {
                 const monto = Number(f.monto_pendiente || f.monto || 0);
@@ -1778,7 +1916,7 @@ async function agregarNuevoGastoCatalogo() {
                         <td><span class="badge ${esPagado ? 'bg-success' : 'bg-warning text-dark'}">${f.estado || 'pendiente'}</span></td>
                         <td class="fw-bold text-primary">$${monto.toLocaleString('es-CL')}</td>
                         <td style="width: 140px;">
-                            <input type="date" id="fecha_FACTURA_${idItem}" value="${fechaActual}" class="form-control form-control-sm" ${esPagado ? 'disabled' : ''}>
+                            <input type="date" id="fecha_FACTURA_${idItem}" value="${fechaActual}" data-fecha-original="${fechaActual}" class="form-control form-control-sm" ${esPagado ? 'disabled' : ''}>
                         </td>
                         <td class="text-end">
                             <div class="btn-group btn-group-sm">
@@ -1799,6 +1937,7 @@ async function agregarNuevoGastoCatalogo() {
                                 </button>
                             </div>
                         </td>
+                        <td class="col-check-masiva"><input type="checkbox" class="form-check-input seleccion-factura-masiva" data-id="${idItem}" onchange="habilitarFechaMasiva(this)" ${esPagado ? 'disabled' : ''}></td>
                     </tr>
                 `;
             }).join('');
@@ -1832,7 +1971,7 @@ async function agregarNuevoGastoCatalogo() {
         document.getElementById('totalMontoPorAgendar').innerText = `$${totalPorAgendar.toLocaleString('es-CL')}`;
 
     } catch (err) {
-        tablaAgendadas.innerHTML = `<tr><td colspan="7" class="text-danger">Error: ${err.message}</td></tr>`;
+        tablaAgendadas.innerHTML = `<tr><td colspan="8" class="text-danger">Error: ${err.message}</td></tr>`;
         tablaPorAgendar.innerHTML = `<tr><td colspan="6" class="text-danger">Error: ${err.message}</td></tr>`;
     }
 }

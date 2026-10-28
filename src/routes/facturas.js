@@ -332,6 +332,94 @@ router.get('/pendientes/:rut', async (req, res) => {
     }
 });
 
+function fechaISOValida(fecha) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) return false;
+    const fechaParseada = new Date(`${fecha}T00:00:00.000Z`);
+    return !Number.isNaN(fechaParseada.getTime()) && fechaParseada.toISOString().slice(0, 10) === fecha;
+}
+
+// Cambiar fecha de pago de una factura desde Consulta por Laboratorio.
+router.post('/reagendar', async (req, res) => {
+    try {
+        const { id, fecha } = req.body || {};
+        if (!id || !fechaISOValida(fecha)) {
+            return res.status(400).json({ exito: false, error: 'Indica una factura y una fecha válida.' });
+        }
+
+        const { data, error } = await req.supabase
+            .from('fc_facturas_programadas')
+            .update({ fecha_pago_programada: fecha })
+            .eq('id', id)
+            .eq('estado', 'pendiente')
+            .select('id, fecha_pago_programada')
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return res.status(409).json({ exito: false, error: 'La factura no está pendiente o ya no existe.' });
+        res.json({ exito: true, mensaje: 'Fecha de pago actualizada.', data });
+    } catch (err) {
+        console.error('Error al cambiar fecha de factura:', err.message);
+        res.status(500).json({ exito: false, error: err.message });
+    }
+});
+
+// Guardar en lote fechas distintas para varias facturas pendientes.
+router.post('/reagendar-lote', async (req, res) => {
+    try {
+        const cambios = req.body?.cambios;
+        if (!Array.isArray(cambios) || cambios.length === 0 || cambios.length > 300) {
+            return res.status(400).json({ exito: false, error: 'Selecciona entre 1 y 300 facturas para modificar.' });
+        }
+
+        const ids = cambios.map(cambio => String(cambio?.id || ''));
+        if (new Set(ids).size !== ids.length || cambios.some(cambio => !cambio?.id || !fechaISOValida(cambio.fecha))) {
+            return res.status(400).json({ exito: false, error: 'Hay facturas repetidas o fechas inválidas. Revisa la selección.' });
+        }
+
+        const { data: filasActuales, error: errorConsulta } = await req.supabase
+            .from('fc_facturas_programadas')
+            .select('id, estado')
+            .in('id', ids);
+        if (errorConsulta) throw errorConsulta;
+
+        const pendientes = new Set((filasActuales || [])
+            .filter(fila => String(fila.estado || '').toLowerCase() === 'pendiente')
+            .map(fila => String(fila.id)));
+        const noDisponibles = ids.filter(id => !pendientes.has(id));
+        if (noDisponibles.length) {
+            return res.status(409).json({
+                exito: false,
+                error: `${noDisponibles.length} factura(s) ya no están pendientes. No se guardaron cambios; actualiza la consulta e inténtalo nuevamente.`
+            });
+        }
+
+        let actualizadas = 0;
+        for (const cambio of cambios) {
+            const { data, error } = await req.supabase
+                .from('fc_facturas_programadas')
+                .update({ fecha_pago_programada: cambio.fecha })
+                .eq('id', cambio.id)
+                .eq('estado', 'pendiente')
+                .select('id')
+                .maybeSingle();
+
+            if (error) throw error;
+            if (!data) {
+                return res.status(409).json({
+                    exito: false,
+                    error: `Se guardaron ${actualizadas} cambio(s), pero una factura dejó de estar pendiente. Actualiza la consulta para revisar el estado.`
+                });
+            }
+            actualizadas++;
+        }
+
+        res.json({ exito: true, actualizadas, mensaje: `Se actualizaron ${actualizadas} fechas de pago.` });
+    } catch (err) {
+        console.error('Error al modificar fechas de facturas en lote:', err.message);
+        res.status(500).json({ exito: false, error: err.message });
+    }
+});
+
 // 3. PASAR FACTURAS/ABONOS SELECCIONADOS AL FLUJO DE CAJA (SIN FACTURA_ID)
 router.post('/programar', async (req, res) => {
     try {
