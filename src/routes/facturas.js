@@ -429,6 +429,56 @@ router.post('/programar', async (req, res) => {
             return res.status(400).json({ error: 'Faltan parámetros requeridos.' });
         }
 
+        const tieneNotaCredito = facturas.some(factura => Number(factura.saldo !== undefined ? factura.saldo : factura.monto || 0) < 0);
+        if (tieneNotaCredito) {
+            const facturasPositivas = facturas.filter(factura => Number(factura.saldo !== undefined ? factura.saldo : factura.monto || 0) > 0);
+            if (!facturasPositivas.length) {
+                return res.status(400).json({ error: 'Para agendar una nota de crédito, selecciona también al menos una factura con saldo positivo.' });
+            }
+            if (monto_abono && Number(monto_abono) > 0) {
+                return res.status(400).json({ error: 'Agenda la factura y la nota de crédito juntas desde Consulta por Laboratorio, con una fecha común.' });
+            }
+
+            // Las notas de crédito son montos negativos: se guardan como líneas propias
+            // para que queden agendadas junto a las facturas y reduzcan el total del día.
+            let totalNeto = 0;
+            for (const factura of facturas) {
+                const saldoActual = Number(factura.saldo !== undefined ? factura.saldo : factura.monto || 0);
+                if (!Number.isFinite(saldoActual) || saldoActual === 0) continue;
+
+                const { error: errInsert } = await req.supabase
+                    .from('fc_facturas_programadas')
+                    .insert({
+                        numero_doc: factura.numero_doc,
+                        proveedor_rut: factura.proveedor_rut,
+                        proveedor_nombre: factura.proveedor_nombre,
+                        monto_original: factura.monto ?? saldoActual,
+                        monto_pendiente: saldoActual,
+                        fecha_vencimiento: factura.fecha_vencimiento,
+                        fecha_pago_programada,
+                        estado: 'pendiente'
+                    });
+                if (errInsert) throw errInsert;
+
+                const { error: errSaldo } = await req.supabase
+                    .from('fc_saldos_facturas')
+                    .upsert({
+                        numero_doc: String(factura.numero_doc),
+                        proveedor_rut: factura.proveedor_rut,
+                        saldo_pendiente: 0,
+                        updated_at: new Date()
+                    }, { onConflict: 'proveedor_rut,numero_doc' });
+                if (errSaldo) throw errSaldo;
+
+                totalNeto += saldoActual;
+            }
+
+            return res.json({
+                exito: true,
+                mensaje: `Factura(s) y nota(s) de crédito agendadas correctamente. Total neto: $${totalNeto.toLocaleString('es-CL')}`
+            });
+        }
+
         const totalDeudaSeleccionada = facturas.reduce((sum, f) => sum + Number(f.saldo !== undefined ? f.saldo : f.monto || 0), 0);
         const montoEfectivoPago = (monto_abono && Number(monto_abono) > 0) ? Number(monto_abono) : totalDeudaSeleccionada;
 
