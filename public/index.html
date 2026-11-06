@@ -362,10 +362,22 @@
                     <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-exclamation-triangle text-warning me-2"></i>Facturas Sin Agendar (Pendientes por Agendar)</h6>
                     <span class="badge bg-warning-subtle text-warning border fw-bold" id="totalMontoPorAgendar">$0</span>
                 </div>
+                <div class="d-flex flex-wrap align-items-end gap-2 mb-2" id="controlesAgendamientoMasivo">
+                    <div>
+                        <label for="fechaAgendarMasivo" class="form-label small mb-1">Fecha común para las seleccionadas</label>
+                        <input type="date" id="fechaAgendarMasivo" class="form-control form-control-sm">
+                    </div>
+                    <button type="button" id="btnAgendarSeleccionadas" class="btn btn-sm btn-primary fw-bold" onclick="agendarSeleccionadas()" disabled>
+                        <i class="bi bi-calendar2-check me-1"></i>Agendar seleccionadas <span class="badge bg-light text-primary ms-1" id="cantidadAgendarSeleccionadas">0</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="seleccionarTodasPorAgendar(true)">Seleccionar todas</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="seleccionarTodasPorAgendar(false)">Limpiar selección</button>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0" style="font-size: 0.78rem;">
                         <thead class="table-secondary">
                             <tr>
+                                <th><input type="checkbox" id="checkTodasPorAgendar" class="form-check-input" aria-label="Seleccionar todas las facturas sin agendar" onchange="seleccionarTodasPorAgendar(this.checked)"></th>
                                 <th>N° Factura</th>
                                 <th>F. Emisión</th>
                                 <th>F. Vencimiento</th>
@@ -375,7 +387,7 @@
                             </tr>
                         </thead>
                         <tbody id="tablaPorAgendarLab">
-                            <tr><td colspan="6" class="text-center text-muted py-4">Seleccione un laboratorio para consultar facturas pendientes por agendar.</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted py-4">Seleccione un laboratorio para consultar facturas pendientes por agendar.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1885,7 +1897,7 @@ async function guardarFechasMasivasFacturas() {
     const estadoFiltro = document.getElementById('selectEstadoFlujo').value;
     
     tablaAgendadas.innerHTML = '<tr><td colspan="8" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas...</td></tr>';
-    tablaPorAgendar.innerHTML = '<tr><td colspan="6" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas sin agendar...</td></tr>';
+    tablaPorAgendar.innerHTML = '<tr><td colspan="7" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando facturas sin agendar...</td></tr>';
     
     try {
         const res = await fetch(`/api/facturas/consulta-laboratorio?rut=${encodeURIComponent(labSeleccionadoActivo.rut)}&nombre=${encodeURIComponent(labSeleccionadoActivo.nombre)}`);
@@ -1957,15 +1969,17 @@ async function guardarFechasMasivasFacturas() {
         document.getElementById('totalMontoAgendado').innerText = `$${totalAgendado.toLocaleString('es-CL')}`;
 
         const porAgendar = data.porAgendar || [];
+        window.facturasPorAgendarActuales = porAgendar;
         let totalPorAgendar = 0;
         if (!porAgendar.length) {
-            tablaPorAgendar.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">🎉 ¡Excelente! No hay facturas pendientes por agendar para este laboratorio.</td></tr>';
+            tablaPorAgendar.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">🎉 ¡Excelente! No hay facturas pendientes por agendar para este laboratorio.</td></tr>';
         } else {
             tablaPorAgendar.innerHTML = porAgendar.map((f, index) => {
                 const monto = Number(f.saldo !== undefined ? f.saldo : f.monto || 0);
                 totalPorAgendar += monto;
                 return `
                     <tr>
+                        <td><input type="checkbox" class="form-check-input factura-por-agendar-seleccionada" data-index="${index}" onchange="actualizarControlesAgendarMasivo()" aria-label="Seleccionar factura ${f.numero_doc}"></td>
                         <td><strong>N° ${f.numero_doc}</strong></td>
                         <td>${formatearFecha(f.fecha_emision || f.fecha_documento)}</td>
                         <td><span class="text-danger fw-semibold">${formatearFecha(f.fecha_vencimiento || f.vencimiento)}</span></td>
@@ -1981,12 +1995,70 @@ async function guardarFechasMasivasFacturas() {
             }).join('');
         }
         document.getElementById('totalMontoPorAgendar').innerText = `$${totalPorAgendar.toLocaleString('es-CL')}`;
+        actualizarControlesAgendarMasivo();
 
     } catch (err) {
         tablaAgendadas.innerHTML = `<tr><td colspan="8" class="text-danger">Error: ${err.message}</td></tr>`;
-        tablaPorAgendar.innerHTML = `<tr><td colspan="6" class="text-danger">Error: ${err.message}</td></tr>`;
+        tablaPorAgendar.innerHTML = `<tr><td colspan="7" class="text-danger">Error: ${err.message}</td></tr>`;
     }
 }
+
+        function seleccionarTodasPorAgendar(seleccionar) {
+            document.querySelectorAll('.factura-por-agendar-seleccionada').forEach(check => { check.checked = seleccionar; });
+            actualizarControlesAgendarMasivo();
+        }
+
+        function actualizarControlesAgendarMasivo() {
+            const checks = Array.from(document.querySelectorAll('.factura-por-agendar-seleccionada'));
+            const seleccionadas = checks.filter(check => check.checked).length;
+            const boton = document.getElementById('btnAgendarSeleccionadas');
+            const contador = document.getElementById('cantidadAgendarSeleccionadas');
+            const checkTodas = document.getElementById('checkTodasPorAgendar');
+            if (boton) boton.disabled = seleccionadas === 0 || boton.dataset.guardando === 'true';
+            if (contador) contador.textContent = String(seleccionadas);
+            if (checkTodas) {
+                checkTodas.checked = checks.length > 0 && seleccionadas === checks.length;
+                checkTodas.indeterminate = seleccionadas > 0 && seleccionadas < checks.length;
+            }
+        }
+
+        async function agendarSeleccionadas() {
+            const checks = Array.from(document.querySelectorAll('.factura-por-agendar-seleccionada:checked'));
+            const fecha = document.getElementById('fechaAgendarMasivo').value;
+            if (!checks.length) return alert('Selecciona al menos una factura.');
+            if (!fecha) return alert('Selecciona la fecha de pago común.');
+
+            const facturas = checks.map(check => {
+                const indice = Number(check.dataset.index);
+                return window.facturasPorAgendarActuales?.[indice];
+            }).filter(Boolean);
+            if (facturas.length !== checks.length) return alert('No se pudieron recuperar todas las facturas. Actualiza la consulta e inténtalo nuevamente.');
+
+            const boton = document.getElementById('btnAgendarSeleccionadas');
+            const contenidoOriginal = boton.innerHTML;
+            boton.dataset.guardando = 'true';
+            boton.disabled = true;
+            boton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Agendando...';
+            try {
+                const res = await fetch('/api/facturas/programar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ facturas, fecha_pago_programada: fecha })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.exito) throw new Error(data.error || data.mensaje || 'No se pudieron agendar las facturas.');
+                alert(`✅ ${facturas.length} factura(s) agendada(s) para ${formatearFecha(fecha)}.`);
+                await cargarConsultaLaboratorio();
+                cargarMatriz();
+                cargarMontosMesesFuturos();
+            } catch (err) {
+                alert(`⚠️ ${err.message}`);
+            } finally {
+                delete boton.dataset.guardando;
+                boton.innerHTML = contenidoOriginal;
+                actualizarControlesAgendarMasivo();
+            }
+        }
 
         async function agendarDirecto(index, facturaEncoded) {
             const factura = JSON.parse(decodeURIComponent(facturaEncoded));
