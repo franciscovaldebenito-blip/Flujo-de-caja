@@ -513,6 +513,30 @@ app.post('/api/facturas/pagar-todo', async (req, res) => {
     }
 });
 
+// Registrar un abono FIFO mediante una función SQL transaccional.
+app.post('/api/facturas/abonar', async (req, res) => {
+    try {
+        const { ids, monto } = req.body || {};
+        const { data, error } = await req.supabase.rpc('fc_aplicar_abono_facturas', {
+            p_ids: ids,
+            p_monto: monto
+        });
+        if (error) throw error;
+        if (!data?.exito) return res.status(400).json(data || { exito: false, error: 'No se pudo aplicar el abono.' });
+
+        const montoAbono = Number(monto);
+        const detalleSobrante = Number(data.sobrante) > 0
+            ? ` Quedó un sobrante sin asignar de $${Number(data.sobrante).toLocaleString('es-CL')}.`
+            : '';
+        res.json({
+            ...data,
+            mensaje: `Abono de $${montoAbono.toLocaleString('es-CL')} aplicado en orden de vencimiento. Saldo neto cubierto: $${Number(data.monto_aplicado).toLocaleString('es-CL')}.${detalleSobrante}`
+        });
+    } catch (err) {
+        console.error('Error al aplicar abono a facturas:', err.message);
+        res.status(500).json({ exito: false, error: err.message || 'No se pudo aplicar el abono.' });
+    }
+});
 // Endpoint para pagar una factura individual desde la vista de laboratorios
 app.post('/api/facturas/pagar/:id', async (req, res) => {
     try {

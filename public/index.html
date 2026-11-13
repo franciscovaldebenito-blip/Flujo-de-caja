@@ -530,6 +530,18 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-3">
+                    <div id="moduloAbonoFactura" class="alert alert-primary py-2 mb-3" style="display: none;">
+                        <div class="d-flex flex-wrap align-items-end gap-2">
+                            <div class="flex-grow-1">
+                                <label for="montoAbonoFactura" class="form-label fw-bold small mb-1"><i class="bi bi-cash-coin me-1"></i>Registrar abono</label>
+                                <input type="number" min="1" step="1" inputmode="numeric" id="montoAbonoFactura" class="form-control form-control-sm" placeholder="Ej.: 56000000">
+                            </div>
+                            <button type="button" id="btnAplicarAbonoFactura" class="btn btn-sm btn-primary fw-bold" onclick="registrarAbonoFactura()">
+                                <i class="bi bi-check2-circle me-1"></i>Aplicar abono
+                            </button>
+                        </div>
+                        <div class="small mt-2">Ingresa pesos sin puntos. Se aplica desde el vencimiento más antiguo; la última factura queda pendiente por la diferencia en esta misma fecha.</div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0" style="font-size: 0.78rem;">
                             <thead class="table-light">
@@ -1364,9 +1376,26 @@ function abrirModalDetalle(tipo, proveedor, fecha) {
         items = (datosMatrizGlobal.gastosFijos || []).filter(g => g.fecha_pago_programada === fecha && g.concepto === proveedor);
     }
 
+    if (tipo === 'FACTURA') {
+        items.sort((a, b) => {
+            const vencimientoA = String(a.fecha_vencimiento || '9999-12-31').split('T')[0];
+            const vencimientoB = String(b.fecha_vencimiento || '9999-12-31').split('T')[0];
+            return vencimientoA.localeCompare(vencimientoB)
+                || String(a.numero_doc || '').localeCompare(String(b.numero_doc || ''), 'es', { numeric: true });
+        });
+    }
+
     // Verificar si hay elementos pendientes para mostrar el botón "Pagar Todo"
     const hayPendientes = items.some(item => item.estado !== 'pagado');
     const provTexto = (proveedor && tipo !== 'CHEQUE') ? ' - ' + proveedor : '';
+
+    const pendientesFactura = tipo === 'FACTURA' ? items.filter(item => item.estado !== 'pagado') : [];
+    const deudaNetaPendiente = pendientesFactura.reduce((total, item) => total + Number(item.monto_pendiente ?? item.monto ?? 0), 0);
+    const moduloAbono = document.getElementById('moduloAbonoFactura');
+    moduloAbono.style.display = tipo === 'FACTURA' && deudaNetaPendiente > 0 ? 'block' : 'none';
+    document.getElementById('montoAbonoFactura').value = '';
+    document.getElementById('btnAplicarAbonoFactura').disabled = false;
+    window.facturasAbonoGrupo = pendientesFactura.map(item => item.id);
 
     // HTML del título estructurado sin comillas anidadas conflictivas
     let htmlBotonPagarTodo = '';
@@ -1433,6 +1462,44 @@ function abrirModalDetalle(tipo, proveedor, fecha) {
     
     modalDetalleInstance.show();
 }
+
+async function registrarAbonoFactura() {
+    const input = document.getElementById('montoAbonoFactura');
+    const boton = document.getElementById('btnAplicarAbonoFactura');
+    const monto = Number(input.value);
+    const ids = Array.isArray(window.facturasAbonoGrupo) ? window.facturasAbonoGrupo : [];
+    if (!Number.isInteger(monto) || monto <= 0) return alert('Ingresa un monto entero mayor que cero.');
+    if (!ids.length) return alert('No hay facturas pendientes para abonar en este grupo.');
+    if (!confirm(`Se aplicará un abono de $${monto.toLocaleString('es-CL')} desde la factura más antigua. ¿Continuar?`)) return;
+
+    const contenidoOriginal = boton.innerHTML;
+    boton.disabled = true;
+    boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Aplicando...';
+    try {
+        const response = await fetch('/api/facturas/abonar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids, monto })
+        });
+        const resultado = await response.json();
+        if (!response.ok || !resultado.exito) throw new Error(resultado.error || 'No se pudo aplicar el abono.');
+
+        const detalleSobrante = resultado.sobrante > 0
+            ? `\nSobrante sin asignar: $${Number(resultado.sobrante).toLocaleString('es-CL')}.`
+            : '';
+        alert(`✅ ${resultado.mensaje}${detalleSobrante}`);
+        modalDetalleInstance.hide();
+        await cargarMatriz();
+        await cargarMontosMesesFuturos();
+        if (labSeleccionadoActivo.rut || labSeleccionadoActivo.nombre) await cargarConsultaLaboratorio();
+    } catch (error) {
+        alert(`⚠️ ${error.message}`);
+    } finally {
+        boton.disabled = false;
+        boton.innerHTML = contenidoOriginal;
+    }
+}
+
 async function pagarTodo(tipo, proveedor, fecha) {
     if (!confirm(`¿Estás seguro de marcar TODOS los registros de este grupo como PAGADOS?`)) return;
 
